@@ -5,6 +5,15 @@ import torchcde
 import math
 
 
+def get_cumulative_moving_sum(X, window=3):
+    """
+    Returns the cumulative moving sum of a path X along its time dimension
+    """
+    assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, dim"
+    X_cumsum = torch.cumsum(X, dim=1)
+    output = X_cumsum[:, window:, :] - X_cumsum[:, :-window, :]
+    return torch.cat([X_cumsum[:, :window, :], output], dim=1)
+
 
 def get_cfi(theta,feature,dim,order):
     """
@@ -92,6 +101,7 @@ def weight_matrix(dim_X,sig_order):
     Weighting matrix for the signature features.
     """
     return np.diag(get_weights(dim_X,sig_order))
+
 
 def matrix_to_function(X, time, interpolation_method):
     """

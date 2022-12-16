@@ -2,6 +2,7 @@ import iisignature as isig
 import numpy as np
 from sklearn.linear_model import LassoCV
 from siglearning.utils import l2_distance, normalize_path, weight_matrix
+from vector_fields import SimpleVectorField
 import torch
 
 
@@ -129,19 +130,55 @@ class GRUModel(torch.nn.Module):
         return l2_distance(Y, Y_pred)
 
 
-def train_gru(model, X, Y, num_epochs, lr=0.001, batch_size=32):
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    train_dataset = torch.utils.data.TensorDataset(X, Y)
-    train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=batch_size)
-    for epoch in range(num_epochs):
-        for batch in train_dataloader:
-            batch_X, batch_y = batch
-            pred_y = model(batch_X)
-            loss = torch.nn.MSELoss()(pred_y, batch_y)
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-        print('Epoch: {}   Training loss: {}'.format(epoch, loss.item()))
 
-    return model
+class NeuralCDE(torch.nn.Module):
+    def __init__(self, input_channels, hidden_channels, interpolation="cubic",
+                 activation='Tanh', vector_field='simple', width=None,
+                 depth=None):
+        super(NeuralCDE, self).__init__()
+        if vector_field == 'simple':
+            self.func = SimpleVectorField(hidden_channels, input_channels,
+                                          non_linearity=activation)
+        elif vector_field == 'multilayer':
+            self.func = MultiLayerVectorField(
+                hidden_channels, input_channels, width, depth,
+                activation=activation)
+        elif vector_field == 'original':
+            self.func = OriginalVectorField(hidden_channels, input_channels)
+        else:
+            raise ValueError(
+                "vector_field must be one of ['simple, 'multilayer']")
+        self.initial = torch.nn.Linear(input_channels, hidden_channels)
+        # self.readout = torch.nn.Linear(hidden_channels, output_channels)
+        self.interpolation = interpolation
+
+    def forward(self, X):
+        coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(
+            X)
+        Xfunc = torchcde.CubicSpline(coeffs)
+        X0 = Xfunc.evaluate(Xfunc.interval[0])
+        z0 = self.initial(X0)
+        z_T = torchcde.cdeint(X=Xfunc,
+                              z0=z0,
+                              func=self.func,
+                              t=Xfunc.interval)
+        z_T = z_T[:, 1]
+        return z_T
+
+    def get_trajectory(self, X, n_points_Y):
+        coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(
+            X)
+        Xfunc = torchcde.CubicSpline(coeffs)
+
+        time_Y = torch.linspace(0, Xfunc.interval[1], 100)
+
+        X0 = Xfunc.evaluate(Xfunc.interval[0])
+        z0 = self.initial(X0)
+
+        Y = torchcde.cdeint(X=Xfunc, z0=z0, func=self.func, t=time_Y)
+
+        return Y.detach().numpy()
+
+    def get_l2_error(self, X, Y, time_X, n_points_Y):
+        Y_pred = self.get_trajectory(X, time_X, n_points_Y)
+        return l2_distance(Y, Y_pred)
