@@ -1,5 +1,6 @@
 import numpy as np
 import iisignature as isig
+import itertools
 import torch
 import torchcde
 import math
@@ -44,6 +45,7 @@ def get_cfi(theta,feature,dim,order):
     normalizing_constant = (dim**(order)-1)/(dim-1)
     return 1/normalizing_constant*cfi
 
+
 def get_pfi(theta,feature,dim,order):
     """
     Computes the normalized PFI of feature i (numbering starts at 0).
@@ -80,15 +82,16 @@ def get_weights(dim_X,order):
     -------
     A vector of size s_(dim_X)(order) of weights for the layer-wise Lasso penalty.
     """
-    weight_vector = np.ones(isig.siglength(dim_X,order))
-    position=1
-    for j in range(1,order+1):
-        factor = math.sqrt(j)/math.factorial(j)
-        weight_vector[position:position+dim_X**j]*= factor
-        position += dim_X**j
+    weight_vector = np.ones(isig.siglength(dim_X, order))
+    position = 1
+    for j in range(1, order+1):
+        factor = math.sqrt(j) / math.factorial(j)
+        weight_vector[position:position + dim_X ** j] *=  factor
+        position += dim_X ** j
     return weight_vector
 
-def weight_matrix(dim_X,sig_order):
+
+def weight_matrix(dim_X, sig_order):
     """
     Create the diagonal weighting matrix.
     Parameters
@@ -100,7 +103,7 @@ def weight_matrix(dim_X,sig_order):
     -------
     Weighting matrix for the signature features.
     """
-    return np.diag(get_weights(dim_X,sig_order))
+    return np.diag(get_weights(dim_X, sig_order))
 
 
 def matrix_to_function(X, time, interpolation_method):
@@ -167,82 +170,6 @@ def add_noise(df,variance):
     return df + np.sqrt(variance)*np.random.randn(df.shape[0],df.shape[1],df.shape[2])
 
 
-def multi_downsample(X, Y, n_points_X, n_points_Y, with_noise=True, noise_X_var=0.5):
-    n_samples = X.shape[0]
-    n_dim = X.shape[2]
-    X_out = np.zeros((n_samples * n_points_Y, n_points_X, n_dim))
-    Y_out = np.zeros((n_samples * n_points_Y, n_dim))
-    running_i = 0
-    for i in np.arange(n_samples):
-        sampling_points = np.random.choice(np.arange(1, X.shape[1]),
-                                           size=n_points_X - 1,
-                                           replace=False)
-        sampling_points_Y = np.random.choice(sampling_points,
-                                             size=n_points_Y,
-                                             replace=False)
-        # Keep the first sampling point
-        sampling_points = np.insert(sampling_points, 0, 0)
-        # Sort the sampling points
-        sampling_points = np.sort(sampling_points)
-        X_downsampled = X[i, sampling_points, :]
-
-        for j in range(n_points_Y):
-            Y_out[running_i, :] = Y[i, sampling_points_Y[j], :]
-            X_out[running_i, :, :] = X_downsampled[:sampling_points_Y[j], :]
-            running_i += 1
-
-    if with_noise:
-        noise_X = noise_X_var * torch.randn(X_out.shape)
-        return torch.Tensor(X_out) + noise_X, Y_out
-    else:
-        return torch.Tensor(X_out), Y_out
-
-
-def downsample(X, n_points_kept, with_noise=False, noise_X_var=0.5):
-    """
-    Downsamples a dataframe, keeping n_points_kept whose index is between limit_down and limit_up.
-    Example: if n_points_kept is set to 5 and limit_down == 3, limit_up == 10, this function will choose 5 points,
-    between the third and the 10th sampling point, for every individual.
-    Little catch: we need the first sampling point to be included for every individual. Therefore, only n_point_kept - 1
-    will be sampled at random.
-
-    Parameters
-    ----------
-    X: matrix to downsample.
-    n_points_kept: number of points to keep for every individual.
-    limit_down: lower index limit.
-    limit_up: upper index limit.
-
-    Returns
-    -------
-    A dataframe whose shape is the same than df, expect for the second dimension which is now of shape n_points_kept.
-    A second dataframe which logs the sampling points for every individual.
-    """
-    n_samples = X.shape[0]
-    n_dim = X.shape[2]
-    downsampled_X = np.zeros((n_samples, n_points_kept, n_dim))
-    times_X = np.zeros((n_samples, n_points_kept))
-    # time_X = np.zeros((n_samples, n_points_kept))
-    for i in np.arange(n_samples):
-        sampling_points = np.random.choice(np.arange(1, X.shape[1]),
-                                           size=n_points_kept - 2,
-                                           replace=False)
-        #Keep the first sampling point
-        sampling_points = np.insert(sampling_points, 0, 0)
-        sampling_points = np.insert(sampling_points, 0, X.shape[1] - 1)
-        #Sort the sampling points
-        sampling_points = np.sort(sampling_points)
-        downsampled_X[i, :, :] = X[i, sampling_points, :]
-        times_X[i, :] = sampling_points
-        # time_X[i, :] = sampling_points / X.shape[1]
-
-    if with_noise:
-        noise_X = noise_X_var * torch.randn(downsampled_X.shape)
-        return torch.Tensor(downsampled_X) + noise_X, torch.Tensor(times_X)
-    else:
-        return torch.Tensor(downsampled_X), torch.Tensor(times_X)
-
-
 def MSE(y, X, theta):
     """
     Computes the MSE between an array of output values y and an array of predicted values X@theta.
@@ -263,6 +190,7 @@ def MSE(y, X, theta):
 
     """
     return (1/X.shape[0])*np.linalg.norm(y - X @ theta) ** 2
+
 
 def recontruct_Y(reg, X, length_Y, order):
     """
@@ -285,6 +213,7 @@ def recontruct_Y(reg, X, length_Y, order):
         new_Y[:, i, 0] = (Xsig_i @ reg.coef_.T).flatten() + reg.intercept_
     return new_Y
 
+
 def l2_distance(X, Y):
     """
     X and Y must be of shape (n_samples, n_points, dim)
@@ -293,6 +222,7 @@ def l2_distance(X, Y):
 
     """
     return np.mean(np.linalg.norm((np.array(X) - np.array(Y)) ** 2, axis=2))
+
 
 def mse_last_point(X, Y):
     """

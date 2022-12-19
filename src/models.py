@@ -1,59 +1,98 @@
 import iisignature as isig
 import numpy as np
-from sklearn.linear_model import LassoCV
-from siglearning.utils import l2_distance, normalize_path, weight_matrix
-from vector_fields import SimpleVectorField
+from sklearn.linear_model import LassoCV, MultiTaskLassoCV
 import torch
+import torchcde
+
+from src.utils import l2_distance, normalize_path, weight_matrix
+from src.vector_fields import SimpleVectorField
 
 
 class SigLasso:
-    def __init__(self, sig_order, alpha_grid, max_iter=int(1e3),
-                 pass_sigs=False, n_times=False, standardize=True, weighted=False):
+    def __init__(self, sig_order: int, dim_Y, max_iter=int(1e3),
+                 pass_sigs=False, n_points=False, normalize=True,
+                 weighted=False,
+                 alpha_grid: np.ndarray = 10 ** np.linspace(-7, 1, 50)):
         """
-
+        TODO: move pass_sigs argument to the functions: there is no reason that it should be an attribute
         Parameters
         ----------
         sig_order: depth of the signature to compute.
         alpha_grid: hyperparameter validation grid for the Lasso.
         max_iter: maximum iterations for solving the penalized regression.
         pass_sigs: if True, SigLasso can be trained directly with signatures instead of paths.
-        n_times: if pass_sigs is True, this is the number of sampling points of X.
-        standardize: if True, paths are normalized by their total variation before signature computation.
+        n_points: if pass_sigs is True, this is the number of sampling points of X.
+        normalize: if True, paths are normalized by their total variation before signature computation.
         weighted: if True, layers of the signature vectors are normalized to enforce layer-wise specific
         penalization.
         """
         self.sig_order = sig_order
         self.alpha_grid = alpha_grid
+
         self.weighted = weighted
-        self.reg = LassoCV(alphas=self.alpha_grid, max_iter=int(max_iter))
-        self.standardize = standardize
+        if dim_Y == 1:
+            self.reg = LassoCV(alphas=self.alpha_grid, max_iter=int(max_iter))
+        else:
+            self.reg = MultiTaskLassoCV(alphas=self.alpha_grid,
+                                        max_iter=int(max_iter))
+        self.normalize = normalize
         self.pass_sigs = pass_sigs
-        if pass_sigs and n_times == False:
+        if pass_sigs and n_points == False:
             raise ValueError('When passing signatures directly,'
                              ' you must also pass the number of sampling points of X.')
         else:
-            self.n_times = n_times
+            self.n_points = n_points
 
-    def train(self, X, Y):
+    def train(self, X, Y, indices_Y=None):
         if self.pass_sigs:
             self.reg.fit(X, Y)
         else:
-            if self.standardize:
+            assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, dim"
+            assert Y.ndim == 3, " Y must have 3 dimensions: n_samples, time, dim"
+
+            if self.normalize:
                 X = normalize_path(X)
 
-            sigX = isig.sig(X, self.sig_order)
+            sigX, Yfinal = self.get_fit_matrices(X, Y, indices_Y=indices_Y)
 
             if self.weighted == True:
                 dim_X = X.shape[2]
-                self.reg.fit(sigX@weight_matrix(dim_X,self.sig_order),Y)
+                self.reg.fit(sigX@weight_matrix(dim_X,self.sig_order), Yfinal)
             else:
-                self.reg.fit(sigX, Y)
+                self.reg.fit(sigX, Yfinal)
+
+    def get_final_matrices(self, X, Y, indices_Y=None):
+        # TODO: un propos quelque part sur quoi faire si le nombre de sampling
+        #  points des X sont différents d'un individu à l'autre: faire du
+        #  remplissage feed-forward car ça ne perturbe pas la signature !
+
+        # TODO: deal with initial value of Y
+
+        # TODO: check everywhere if we need numpy or tensor arrays!
+        if Y.shape[1] == 1:
+            return isig.sig(X, self.sig_order), Y[:, 0, :]
+        else:
+            if indices_Y is None:
+                raise ValueError('If Y has more than one observation, the '
+                                 'indices of the observations must be passed.')
+            list_sigXs = []
+            list_Yfinal = []
+            indices_Y = indices_Y.numpy().astype(int)
+            for i in range(Y.shape[0]):
+                for j in range(indices_Y.shape[1]):
+                    index_Y = indices_Y[i, j]
+                    # print(index_Y)
+                    # print(f'Size of X: {X[i, :index_Y, :].shape}')
+                    list_sigXs.append(
+                        isig.sig(X[i, :index_Y, :], self.sig_order)) # Signature of the path up to observation time of Y
+                    list_Yfinal.append(Y[i, j, :])
+            return np.stack(list_sigXs), np.stack(list_Yfinal)
 
     def predict(self, X):
         if self.pass_sigs:
             return self.reg.predict(X)
         else:
-            if self.standardize:
+            if self.normalize:
                 X = normalize_path(X)
             sigX = isig.sig(X, self.sig_order)
             if self.weighted == True:
@@ -64,7 +103,7 @@ class SigLasso:
     def predict_trajectory(self, X):
         new_Y = np.zeros((X.shape[0], X.shape[1], 1))
         for i in range(0, X.shape[1]):
-            if self.standardize:
+            if self.normalize:
                 X_i = normalize_path(X[:, :i + 1, :])
             else:
                 X_i = X[:, :i + 1, :]
@@ -77,7 +116,7 @@ class SigLasso:
         return new_Y
 
     def get_l2_error(self, X, Y_full):
-        # if self.standardize:
+        # if self.normalize:
         #     X = normalize_path(X)
         new_Y = self.predict_trajectory(X)
         return l2_distance(Y_full, new_Y)

@@ -3,7 +3,7 @@ from stochastic.processes.diffusion import OrnsteinUhlenbeckProcess
 import torch
 import torchcde
 
-from src.utils import matrix_to_function
+from src.utils import matrix_to_function, get_cumulative_moving_sum
 from src.vector_fields import SimpleVectorField
 
 
@@ -53,15 +53,16 @@ class CDEModel():
     """
     CDE model with vector field one layer neural network initialized randomly.
     """
-    def __init__(self, dim_X, dim_Y, non_linearity=None):
+    def __init__(self, dim_X: int, dim_Y: int, non_linearity: str = None):
         self.dim_X = dim_X
         self.dim_Y = dim_Y
         self.vector_field = SimpleVectorField(
             dim_Y, dim_X, non_linearity=non_linearity)
         self.Y0 = torch.randn(dim_Y)
 
-    def get_Y(self, X, time, interpolation_method='cubic', with_noise=True,
-              noise_Y_var=0.01):
+    def get_Y(self, X: torch.Tensor, time: torch.Tensor,
+              interpolation_method: str = 'cubic', with_noise: bool = True,
+              noise_Y_var: float = 0.01):
         """
         Samples Y from X
 
@@ -84,7 +85,7 @@ class CDEModel():
 def get_train_val_test(
         model_X: str, model_Y: str, n_train: int, n_val: int, n_test: int,
         dim_X: int, dim_Y: int, n_points_true: int,
-        non_linearity_Y: str = None):
+        non_linearity_Y: str = None, window_Y: int = 3):
 
     time_true = torch.linspace(0, 1, n_points_true)
 
@@ -97,16 +98,29 @@ def get_train_val_test(
         Y_train = gen_cde.get_Y(X_train, time_true)
         Y_test = gen_cde.get_Y(X_test, time_true)
         Y_val = gen_cde.get_Y(X_val, time_true)
+        return X_train, Y_train, X_val, Y_val, X_test, Y_test
 
     elif model_Y == 'lognorm':
-        Y_train = torch.log(torch.linalg.norm(X_train, axis=2)).unsqueeze(-1)
-        Y_test = torch.log(torch.linalg.norm(X_test, axis=2)).unsqueeze(-1)
-        Y_val = torch.log(torch.linalg.norm(X_val, axis=2)).unsqueeze(-1)
+        Y_train = torch.log(
+            torch.linalg.norm(
+                get_cumulative_moving_sum(X_train, window=window_Y),
+                axis=2)
+        ).unsqueeze(-1)
+        Y_test = torch.log(
+            torch.linalg.norm(
+                get_cumulative_moving_sum(X_test, window=window_Y),
+                axis=2)
+        ).unsqueeze(-1)
+        Y_val = torch.log(
+            torch.linalg.norm(
+                get_cumulative_moving_sum(X_val, window=window_Y),
+                axis=2)
+        ).unsqueeze(-1)
+        return X_train, Y_train, X_val, Y_val, X_test, Y_test
 
     else:
         NotImplementedError(f"{model_Y} not implemented.")
 
-    return X_train, Y_train, X_val, Y_val, X_test, Y_test
 
 
 
