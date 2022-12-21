@@ -3,18 +3,28 @@ import numpy as np
 from sklearn.linear_model import LassoCV, MultiTaskLassoCV
 import torch
 import torchcde
+from typing import Tuple
+import warnings
 
-from src.utils import l2_distance, normalize_path, weight_matrix
+from src.utils import l2_distance, normalize_path, get_weight_matrix
 from src.vector_fields import SimpleVectorField
+
+warnings.simplefilter('once', UserWarning)
+
+# TODO: un propos quelque part sur quoi faire si le nombre de sampling
+#  points des X sont différents d'un individu à l'autre: faire du
+#  remplissage feed-forward car ça ne perturbe pas la signature ?
+
+# TODO: check everywhere if we need numpy or tensor arrays!
+
+# TODO: résoudre la question de Y au temps 0
 
 
 class SigLasso:
     def __init__(self, sig_order: int, dim_Y, max_iter=int(1e3),
-                 pass_sigs=False, n_points=False, normalize=True,
-                 weighted=False,
+                 normalize=True, weighted=False,
                  alpha_grid: np.ndarray = 10 ** np.linspace(-7, 1, 50)):
         """
-        TODO: move pass_sigs argument to the functions: there is no reason that it should be an attribute
         Parameters
         ----------
         sig_order: depth of the signature to compute.
@@ -30,95 +40,120 @@ class SigLasso:
         self.alpha_grid = alpha_grid
 
         self.weighted = weighted
-        if dim_Y == 1:
+
+        self.dim_Y = dim_Y
+        if self.dim_Y == 1:
             self.reg = LassoCV(alphas=self.alpha_grid, max_iter=int(max_iter))
         else:
             self.reg = MultiTaskLassoCV(alphas=self.alpha_grid,
                                         max_iter=int(max_iter))
         self.normalize = normalize
-        self.pass_sigs = pass_sigs
-        if pass_sigs and n_points == False:
-            raise ValueError('When passing signatures directly,'
-                             ' you must also pass the number of sampling points of X.')
-        else:
-            self.n_points = n_points
 
-    def train(self, X, Y, indices_Y=None):
-        if self.pass_sigs:
+    def train(self, X: torch.Tensor, Y: torch.Tensor,
+              grid_Y: torch.Tensor=None, pass_sigs: bool = False):
+        if pass_sigs:
             self.reg.fit(X, Y)
         else:
             assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, dim"
             assert Y.ndim == 3, " Y must have 3 dimensions: n_samples, time, dim"
 
+            # TO DO : problem in normalization: do we do it here or for each subpath ?
             if self.normalize:
                 X = normalize_path(X)
 
-            sigX, Yfinal = self.get_fit_matrices(X, Y, indices_Y=indices_Y)
+            sigX, Yfinal = self.get_final_matrices(X, Y, grid_Y=grid_Y)
 
-            if self.weighted == True:
-                dim_X = X.shape[2]
-                self.reg.fit(sigX@weight_matrix(dim_X,self.sig_order), Yfinal)
+            if self.weighted:
+                self.reg.fit(
+                    sigX @ get_weight_matrix(X.shape[2], self.sig_order),
+                    Yfinal)
             else:
                 self.reg.fit(sigX, Yfinal)
 
-    def get_final_matrices(self, X, Y, indices_Y=None):
-        # TODO: un propos quelque part sur quoi faire si le nombre de sampling
-        #  points des X sont différents d'un individu à l'autre: faire du
-        #  remplissage feed-forward car ça ne perturbe pas la signature !
-
-        # TODO: deal with initial value of Y
-
-        # TODO: check everywhere if we need numpy or tensor arrays!
+    def get_final_matrices(
+            self, X: torch.Tensor, Y: torch.Tensor,grid_Y: torch.Tensor = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         if Y.shape[1] == 1:
             return isig.sig(X, self.sig_order), Y[:, 0, :]
         else:
-            if indices_Y is None:
+            if grid_Y is None:
                 raise ValueError('If Y has more than one observation, the '
                                  'indices of the observations must be passed.')
             list_sigXs = []
             list_Yfinal = []
-            indices_Y = indices_Y.numpy().astype(int)
-            for i in range(Y.shape[0]):
-                for j in range(indices_Y.shape[1]):
-                    index_Y = indices_Y[i, j]
-                    # print(index_Y)
-                    # print(f'Size of X: {X[i, :index_Y, :].shape}')
-                    list_sigXs.append(
-                        isig.sig(X[i, :index_Y, :], self.sig_order)) # Signature of the path up to observation time of Y
-                    list_Yfinal.append(Y[i, j, :])
-            return np.stack(list_sigXs), np.stack(list_Yfinal)
 
-    def predict(self, X):
-        if self.pass_sigs:
+            grid_Y = grid_Y.numpy().astype(int)
+            for i in range(Y.shape[0]):
+                for j in range(grid_Y.shape[1]):
+                    index_Y = grid_Y[i, j]
+
+                    if index_Y == 0:
+                        warnings.warn(
+                            'An observation of Y at time 0 has been skipped '
+                            'since we need at least two observations of X up '
+                            'to observation of Y')
+                    else:
+                        list_sigXs.append(
+                        isig.sig(X[i, :index_Y, :], self.sig_order)) # Signature of the path up to observation time of Y
+                        list_Yfinal.append(Y[i, j, :])
+
+            return torch.from_numpy(np.stack(list_sigXs)), torch.stack(list_Yfinal)
+
+    def predict(self, X: torch.Tensor, on_grid: torch.Tensor = None,
+                pass_sigs: bool = False) -> torch.Tensor:
+        if on_grid is not None:
+            assert on_grid.ndim == 2, " grid must have 2 dimensions: " \
+                                      "n_samples, time"
+            on_grid = on_grid.numpy().astype(int)
+        else:
+            # If on_grid has not been passed as argument, we predict Y only at
+            # the last time step
+            on_grid = np.tile([X.shape[1]], (X.shape[0], 1))
+            print(on_grid.shape)
+
+        if pass_sigs:
             return self.reg.predict(X)
         else:
+            # new_Y = np.zeros((X.shape[0], on_grid.shape[1], self.dim_Y))
+
+            assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, dim"
             if self.normalize:
                 X = normalize_path(X)
-            sigX = isig.sig(X, self.sig_order)
-            if self.weighted == True:
-                dim_X = X.shape[2]
-                sigX = sigX@weight_matrix(dim_X,self.sig_order)
-            return self.reg.predict(sigX)
 
-    def predict_trajectory(self, X):
-        new_Y = np.zeros((X.shape[0], X.shape[1], 1))
-        for i in range(0, X.shape[1]):
-            if self.normalize:
-                X_i = normalize_path(X[:, :i + 1, :])
-            else:
-                X_i = X[:, :i + 1, :]
-            Xsig_i = isig.sig(X_i, self.sig_order)
-            if self.weighted:
-                dim_X = X.shape[2]
-                Xsig_i = Xsig_i @ weight_matrix(dim_X, self.sig_order)
-            new_Y[:, i, 0] = ((Xsig_i @ self.reg.coef_.T).flatten()
-                              + self.reg.intercept_)
-        return new_Y
+            list_pred = []
+            for i in range(X.shape[0]):
+                pred_Y = []
+                for j in range(on_grid.shape[1]):
+                    index_grid = on_grid[i, j]
 
-    def get_l2_error(self, X, Y_full):
-        # if self.normalize:
-        #     X = normalize_path(X)
-        new_Y = self.predict_trajectory(X)
+                    if index_grid == 0:
+                        warnings.warn(
+                            'An observation of Y at time 0 has been skipped '
+                            'since we need at least two observations of X up '
+                            'to observation of Y')
+                    else:
+                        sub_X_i = X[i, :index_grid, :]
+                        sigX_i = isig.sig(sub_X_i, self.sig_order).reshape(1, -1)
+                        if self.weighted:
+                            pred_Y.append(self.reg.predict(
+                                sigX_i @ get_weight_matrix(X.shape[2],
+                                                         self.sig_order)))
+                        else:
+                            pred_Y.append(self.reg.predict(sigX_i))
+                list_pred.append(np.stack(pred_Y, axis=1).squeeze(0))
+            return torch.from_numpy(np.stack(list_pred))
+
+    def get_l2_error(self, X: torch.Tensor, Y_full: torch.Tensor,
+                     grid_Y: torch.Tensor, pass_sigs=False) -> float:
+        assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, dim"
+        assert Y_full.ndim == 3, "Y must have 3 dimensions: n_samples, time," \
+                                 " dim"
+        assert grid_Y.ndim == 2, "grid_Y must have 2 dimensions: n_samples," \
+                                 " time"
+
+        if self.normalize:
+            X = normalize_path(X)
+        new_Y = self.predict(X, on_grid=grid_Y, pass_sigs=pass_sigs)
         return l2_distance(Y_full, new_Y)
 
 

@@ -6,7 +6,7 @@ import torchcde
 import math
 
 
-def get_cumulative_moving_sum(X, window=3):
+def get_cumulative_moving_sum(X: torch.Tensor, window: int = 3):
     """
     Returns the cumulative moving sum of a path X along its time dimension
     """
@@ -86,12 +86,12 @@ def get_weights(dim_X,order):
     position = 1
     for j in range(1, order+1):
         factor = math.sqrt(j) / math.factorial(j)
-        weight_vector[position:position + dim_X ** j] *=  factor
+        weight_vector[position:position + dim_X ** j] *= factor
         position += dim_X ** j
     return weight_vector
 
 
-def weight_matrix(dim_X, sig_order):
+def get_weight_matrix(dim_X, sig_order):
     """
     Create the diagonal weighting matrix.
     Parameters
