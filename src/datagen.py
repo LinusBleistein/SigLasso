@@ -1,5 +1,6 @@
 import numpy as np
 from stochastic.processes.diffusion import OrnsteinUhlenbeckProcess
+from stochastic.processes.continuous import BrownianMotion
 import torch
 import torchcde
 
@@ -26,6 +27,17 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int,
         X = Xfunc.evaluate(torch.linspace(0, 1, n_points))
         return X
 
+    if model_X == 'squared_brownian':
+        t = torch.linspace(0, 10, n_points)
+        bm = BrownianMotion(t=10)
+        x_ = torch.zeros((n_samples, n_points, 2))
+
+        for i in np.arange(n_samples):
+            x_[i, :, 0] = torch.tensor(bm.sample_at(t)**2)
+            x_[i, :, 1] = t
+
+        return x_
+
     elif model_X == 'cubic_diffusion':
 
         t = torch.linspace(0, 1, n_points)
@@ -47,6 +59,45 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int,
         return X
     else:
         raise NotImplementedError(f"{model_X} not implemented.")
+
+class TumorGrowth():
+
+    def __init__(self,lambda_0=0.9,lambda_1 = 0.7, k_1 = 10, k_2 = 0.5, psi = 20):
+        self.lambda_0 = lambda_0
+        self.lambda_1 = lambda_1
+        self.k_1 = k_1
+        self.k_2 = k_2
+        self.psi = psi
+
+    def tumor_growth(self,u,y,x):
+        du_1 = self.lambda_0 * u[0] * (1 + (self.lambda_0 / self.lambda_1 * y) ** self.psi) ** (-1 / self.psi) - self.k_2 * x * u[0]
+        du_2 = self.k_2 * x * u[0] - self.k_1 * u[1]
+        du_3 = self.k_1 * (u[1] - u[2])
+        du_4 = self.k_1 * (u[2] - u[3])
+        return np.array([du_1, du_2, du_3, du_4])
+
+    def tumor_trajectory(self,x):
+        y_track = []
+        u = np.array([2, 0, 0, 0])
+        y = 2
+        dt = 10/len(x)
+        y_track.append(y)
+
+        for i, t in enumerate(np.arange(0, 10-dt, step=dt)):
+            u = u + dt * self.tumor_growth(u, y_track[i], x[i])
+            y = np.sum(u)
+            y_track.append(y)
+
+        return torch.tensor(y_track)
+
+    def get_Y(self,X):
+
+        Y = torch.zeros(X.shape[0],X.shape[1])
+        for i in np.arange(X.shape[0]):
+            Y[i,:] = self.tumor_trajectory(X[i,:,:-1].flatten())
+
+        return Y
+
 
 
 class CDEModel():
@@ -99,6 +150,15 @@ def get_train_val_test(
         Y_test = gen_cde.get_Y(X_test, time_true)
         Y_val = gen_cde.get_Y(X_val, time_true)
         return X_train, Y_train, X_val, Y_val, X_test, Y_test
+
+    if model_Y == 'tumor_growth':
+        gen_tumor = TumorGrowth()
+        Y_train = gen_tumor.get_Y(X_train)
+        Y_test = gen_tumor.get_Y(X_test)
+        Y_val = gen_tumor.get_Y(X_val)
+
+    return X_train, Y_train, X_val, Y_val, X_test, Y_test
+
 
     elif model_Y == 'lognorm':
         Y_train = torch.log(
