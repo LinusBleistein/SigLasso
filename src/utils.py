@@ -1,9 +1,11 @@
 import numpy as np
 import iisignature as isig
 import itertools
+import math
 import torch
 import torchcde
-import math
+from typing import Tuple
+import warnings
 
 
 def get_cumulative_moving_sum(X: torch.Tensor, window: int = 3):
@@ -14,6 +16,36 @@ def get_cumulative_moving_sum(X: torch.Tensor, window: int = 3):
     X_cumsum = torch.cumsum(X, dim=1)
     output = X_cumsum[:, window:, :] - X_cumsum[:, :-window, :]
     return torch.cat([X_cumsum[:, :window, :], output], dim=1)
+
+
+def split_XY_on_grid(X: torch.Tensor, Y: torch.Tensor,
+                     grid_Y: torch.Tensor = None) -> Tuple[
+    torch.Tensor, torch.Tensor]:
+    if Y.shape[1] == 1:
+            return X, Y[:, 0, :]
+    else:
+        if grid_Y is None:
+            raise ValueError('If Y has more than one observation, the '
+                                 'indices of the observations must be passed.')
+        list_Xs = []
+        list_Yfinal = []
+
+        grid_Y = grid_Y.numpy().astype(int)
+        for i in range(Y.shape[0]):
+            for j in range(grid_Y.shape[1]):
+                index_Y = grid_Y[i, j]
+                if index_Y == 0:
+                    warnings.warn(
+                            'An observation of Y at time 0 has been skipped '
+                            'since we need at least two observations of X up '
+                            'to observation of Y')
+                else:
+                    # Y has already been downsampled so you should use j
+                    # and not index_Y here
+                    list_Xs.append(X[i, :index_Y, :])
+                    list_Yfinal.append(Y[i, j, :])
+
+        return list_Xs, torch.stack(list_Yfinal)
 
 
 def get_cfi(theta,feature,dim,order):

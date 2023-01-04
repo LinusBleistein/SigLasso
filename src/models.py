@@ -55,8 +55,8 @@ class SigLasso:
         if pass_sigs:
             self.reg.fit(X, Y)
         else:
-            assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, dim"
-            assert Y.ndim == 3, " Y must have 3 dimensions: n_samples, time, dim"
+            assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, channels"
+            assert Y.ndim == 3, " Y must have 3 dimensions: n_samples, time, channels"
 
             # TO DO : problem in normalization: do we do it here or for each subpath ?
             if self.normalize:
@@ -72,7 +72,7 @@ class SigLasso:
                 self.reg.fit(sigX, Yfinal)
 
     def get_final_matrices(
-            self, X: torch.Tensor, Y: torch.Tensor,grid_Y: torch.Tensor = None
+            self, X: torch.Tensor, Y: torch.Tensor, grid_Y: torch.Tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         if Y.shape[1] == 1:
             return isig.sig(X, self.sig_order), Y[:, 0, :]
@@ -94,8 +94,11 @@ class SigLasso:
                             'since we need at least two observations of X up '
                             'to observation of Y')
                     else:
+                        # Signature of the path up to observation time of Y
                         list_sigXs.append(
-                        isig.sig(X[i, :index_Y, :], self.sig_order)) # Signature of the path up to observation time of Y
+                        isig.sig(X[i, :index_Y, :], self.sig_order))
+                        # Y has already been downsampled so you should use j
+                        # and not index_Y here
                         list_Yfinal.append(Y[i, j, :])
 
             return torch.from_numpy(np.stack(list_sigXs)), torch.stack(list_Yfinal)
@@ -110,14 +113,14 @@ class SigLasso:
             # If on_grid has not been passed as argument, we predict Y only at
             # the last time step
             on_grid = np.tile([X.shape[1]], (X.shape[0], 1))
-            print(on_grid.shape)
 
         if pass_sigs:
             return self.reg.predict(X)
         else:
             # new_Y = np.zeros((X.shape[0], on_grid.shape[1], self.dim_Y))
 
-            assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, dim"
+            assert X.ndim == 3, " X must have 3 dimensions: " \
+                                "n_samples, time, channels"
             if self.normalize:
                 X = normalize_path(X)
 
@@ -142,15 +145,19 @@ class SigLasso:
                         else:
                             pred_Y.append(self.reg.predict(sigX_i))
                 list_pred.append(np.stack(pred_Y, axis=1).squeeze(0))
-            return torch.from_numpy(np.stack(list_pred))
+            if self.dim_Y == 1:
+                return torch.from_numpy(np.stack(list_pred)).unsqueeze(-1)
+            else:
+                return torch.from_numpy(np.stack(list_pred))
 
     def get_l2_error(self, X: torch.Tensor, Y_full: torch.Tensor,
                      grid_Y: torch.Tensor, pass_sigs=False) -> float:
-        assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, dim"
-        assert Y_full.ndim == 3, "Y must have 3 dimensions: n_samples, time," \
-                                 " dim"
-        assert grid_Y.ndim == 2, "grid_Y must have 2 dimensions: n_samples," \
-                                 " time"
+        assert X.ndim == 3, " X must have 3 dimensions: " \
+                            "n_samples, time, channels"
+        assert Y_full.ndim == 3, "Y must have 3 dimensions: " \
+                                 "n_samples, time, channels"
+        assert grid_Y.ndim == 2, "grid_Y must have 2 dimensions: " \
+                                 "n_samples, time"
 
         if self.normalize:
             X = normalize_path(X)
@@ -159,8 +166,8 @@ class SigLasso:
 
 
 class GRUModel(torch.nn.Module):
-    def __init__(self, input_channels, hidden_channels, output_dim,
-                 layer_dim=1):
+    def __init__(self, input_channels: int, hidden_channels: int, output_dim: int,
+                 layer_dim: int = 1):
         super(GRUModel, self).__init__()
 
         # Defining the number of layers and the nodes in each layer
@@ -174,34 +181,43 @@ class GRUModel(torch.nn.Module):
         # Fully connected layer
         self.fc = torch.nn.Linear(hidden_channels, output_dim)
 
-    def forward(self, x):
+    def forward(self, X: torch.Tensor):
+        assert X.ndim == 3, " X must have 3 dimensions: " \
+                            "n_samples, time, channels"
         # Initializing hidden state for first input with zeros
-        h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_channels).requires_grad_()
+        h0 = torch.zeros(
+            self.layer_dim, X.size(0), self.hidden_channels).requires_grad_()
 
-        # Forward propagation by passing in the input and hidden state into the model
-        out, _ = self.gru(x, h0.detach())
+        # Forward propagation by passing in the input and hidden state
+        # into the model
+        out, _ = self.gru(X, h0.detach())
 
-        # Reshaping the outputs in the shape of (batch_size, seq_length, hidden_size)
-        # so that it can fit into the fully connected layer
+        # Reshaping the outputs in the shape of
+        # (batch_size, seq_length, hidden_size) so that it can fit into the
+        # fully connected layer
         out = out[:, -1, :]
 
-        # Convert the final state to our desired output shape (batch_size, output_dim)
+        # Convert the final state to our desired output shape
+        # (batch_size, output_dim)
         out = self.fc(out)
 
         return out
 
-    def get_trajectory(self, x):
-        h0 = torch.zeros(self.layer_dim, x.size(0),
+    def predict_trajectory(self, X: torch.Tensor) -> torch.Tensor:
+        assert X.ndim == 3, " X must have 3 dimensions: " \
+                            "n_samples, time, channels"
+
+        h0 = torch.zeros(self.layer_dim, X.size(0),
                          self.hidden_channels).requires_grad_()
-        hidden_states, _ = self.gru(x, h0.detach())
+        hidden_states, _ = self.gru(X, h0.detach())
         out = []
-        for i in range(x.shape[1]):
+        for i in range(X.shape[1]):
             out.append(self.fc(hidden_states[:, i, :]))
         Y = torch.stack(out, dim=1)
-        return Y.detach().numpy()
+        return Y.detach() # Need to detach to later compute l2 distance
 
     def get_l2_error(self, X, Y):
-        Y_pred = self.get_trajectory(X)
+        Y_pred = self.predict_trajectory(X)
         return l2_distance(Y, Y_pred)
 
 

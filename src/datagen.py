@@ -8,9 +8,10 @@ from src.utils import matrix_to_function, get_cumulative_moving_sum
 from src.vector_fields import SimpleVectorField
 
 
-def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int,
+def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
              n_knots: int = 15):
-    """ Simulation of trajectories for predictor.
+    """ Simulation of trajectories for predictor. The 1st coordinate of X is
+    always time
 
     """
     if model_X == 'cubic':
@@ -33,8 +34,8 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int,
         x_ = torch.zeros((n_samples, n_points, 2))
 
         for i in np.arange(n_samples):
-            x_[i, :, 0] = torch.tensor(bm.sample_at(t)**2)
-            x_[i, :, 1] = t
+            x_[i, :, 0] = t
+            x_[i, :, 1] = 0.25 * torch.tensor(bm.sample_at(t) ** 2)
 
         return x_
 
@@ -51,53 +52,62 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int,
                 x_[i, :, dimension] = torch.tensor(
                     diffusion.sample(n=n_points - 1))
         X = torch.cat([t_, x_], dim=2)
-
-        #coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(
-            #x, t=t)
-        #Xfunc = torchcde.CubicSpline(coeffs, t=t)
-        #X = Xfunc.evaluate(torch.linspace(0, 1, n_points))
         return X
+
     else:
-        raise NotImplementedError(f"{model_X} not implemented.")
+        raise NotImplementedError(
+            f"{model_X} not implemented. Accepted values for model_X are "
+            f"'cubic_diffusion', 'squared_brownian', and 'cubic' ")
 
-class TumorGrowth():
 
-    def __init__(self,lambda_0=0.9,lambda_1 = 0.7, k_1 = 10, k_2 = 0.5, psi = 20):
+class TumorGrowth:
+    def __init__(self, lambda_0=0.9, lambda_1=0.7, k_1=10, k_2=0.5, psi=20):
         self.lambda_0 = lambda_0
         self.lambda_1 = lambda_1
         self.k_1 = k_1
         self.k_2 = k_2
         self.psi = psi
 
-    def tumor_growth(self,u,y,x):
-        du_1 = self.lambda_0 * u[0] * (1 + (self.lambda_0 / self.lambda_1 * y) ** self.psi) ** (-1 / self.psi) - self.k_2 * x * u[0]
+    def tumor_growth(self, u, y, x):
+        assert u.ndim == 1, "u must be a one dimensional array of length 4"
+        assert u.shape[0] == 4, "u must be a one dimensional array of length 4"
+
+        assert isinstance(x, float), "x must be a float"
+        assert isinstance(y, float), "y must be a float"
+
+        du_1 = self.lambda_0 * u[0] * (
+                1 + (self.lambda_0 / self.lambda_1 * y) ** self.psi) ** (
+                -1 / self.psi) - self.k_2 * x * u[0]
         du_2 = self.k_2 * x * u[0] - self.k_1 * u[1]
         du_3 = self.k_1 * (u[1] - u[2])
         du_4 = self.k_1 * (u[2] - u[3])
         return np.array([du_1, du_2, du_3, du_4])
 
-    def tumor_trajectory(self,x):
+    def tumor_trajectory(self, x):
+        assert x.ndim == 1, "x must be a one-dimensional array"
         y_track = []
         u = np.array([2, 0, 0, 0])
-        y = 2
+        y = 2.
         dt = 10/len(x)
         y_track.append(y)
 
         for i, t in enumerate(np.arange(0, 10-dt, step=dt)):
-            u = u + dt * self.tumor_growth(u, y_track[i], x[i])
+            u = u + dt * self.tumor_growth(u, float(y_track[i]), float(x[i]))
             y = np.sum(u)
             y_track.append(y)
 
         return torch.tensor(y_track)
 
-    def get_Y(self,X):
+    def get_Y(self, X):
+        assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, channels"
+        assert X.shape[2] == 2, "To generate tumor trajectories, X must be " \
+                                "1-dimensional, hence we must have " \
+                                "X.shape[2] == 2 (time being included in X)"
 
-        Y = torch.zeros(X.shape[0],X.shape[1])
+        Y = torch.zeros(X.shape[0], X.shape[1], 1)
         for i in np.arange(X.shape[0]):
-            Y[i,:] = self.tumor_trajectory(X[i,:,:-1].flatten())
-
+            Y[i, :, 0] = self.tumor_trajectory(X[i, :, 1].flatten())
         return Y
-
 
 
 class CDEModel():
@@ -108,20 +118,20 @@ class CDEModel():
         self.dim_X = dim_X
         self.dim_Y = dim_Y
         self.vector_field = SimpleVectorField(
-            dim_Y, dim_X, non_linearity=non_linearity)
+            dim_X, dim_Y, non_linearity=non_linearity)
         self.Y0 = torch.randn(dim_Y)
 
     def get_Y(self, X: torch.Tensor, time: torch.Tensor,
-              interpolation_method: str = 'cubic', with_noise: bool = True,
+              interpolation_method: str = 'linear', with_noise: bool = True,
               noise_Y_var: float = 0.01):
         """
         Samples Y from X
 
         """
-        #Path interpolation to obtain smooth paths
+        # Path interpolation to obtain smooth paths
         Xfunc = matrix_to_function(X, time, interpolation_method)
 
-        #Set uniform initial random condition (every individual has the same)
+        # Set uniform initial random condition (every individual has the same)
         z0 = self.Y0 * torch.ones(X.shape[0], self.dim_Y)
         Y = torchcde.cdeint(
             X=Xfunc, func=self.vector_field, z0=z0, t=time)
@@ -135,30 +145,34 @@ class CDEModel():
 
 def get_train_val_test(
         model_X: str, model_Y: str, n_train: int, n_val: int, n_test: int,
-        dim_X: int, dim_Y: int, n_points_true: int,
+        n_points_true: int, dim_X: int = None, dim_Y: int = None,
         non_linearity_Y: str = None, window_Y: int = 3):
 
     time_true = torch.linspace(0, 1, n_points_true)
 
-    X_train = create_X(model_X, n_train, n_points_true, dim_X)
-    X_test = create_X(model_X, n_test, n_points_true, dim_X)
-    X_val = create_X(model_X, n_val, n_points_true, dim_X)
+    X_train = create_X(model_X, n_train, n_points_true, dim_X=dim_X)
+    X_test = create_X(model_X, n_test, n_points_true, dim_X=dim_X)
+    X_val = create_X(model_X, n_val, n_points_true, dim_X=dim_X)
+
+    if dim_X is not None:
+        assert X_train.shape[2] == dim_X, "Inconsistency between model_X " \
+                                          "and dim_X"
+    else:
+        dim_X = X_train.shape[2]
 
     if model_Y == 'cde':
+        assert dim_Y is not None, "if model_Y is 'cde' then dim_Y is required"
+
         gen_cde = CDEModel(dim_X, dim_Y, non_linearity=non_linearity_Y)
         Y_train = gen_cde.get_Y(X_train, time_true)
         Y_test = gen_cde.get_Y(X_test, time_true)
         Y_val = gen_cde.get_Y(X_val, time_true)
-        return X_train, Y_train, X_val, Y_val, X_test, Y_test
 
     if model_Y == 'tumor_growth':
         gen_tumor = TumorGrowth()
         Y_train = gen_tumor.get_Y(X_train)
         Y_test = gen_tumor.get_Y(X_test)
         Y_val = gen_tumor.get_Y(X_val)
-
-    return X_train, Y_train, X_val, Y_val, X_test, Y_test
-
 
     elif model_Y == 'lognorm':
         Y_train = torch.log(
@@ -176,10 +190,14 @@ def get_train_val_test(
                 get_cumulative_moving_sum(X_val, window=window_Y),
                 axis=2)
         ).unsqueeze(-1)
-        return X_train, Y_train, X_val, Y_val, X_test, Y_test
 
     else:
         NotImplementedError(f"{model_Y} not implemented.")
+
+    if dim_Y is not None:
+        assert Y_train.shape[2] == dim_Y, "Inconsistency between model_Y " \
+                                          "and dim_Y"
+    return X_train, Y_train, X_val, Y_val, X_test, Y_test
 
 
 
