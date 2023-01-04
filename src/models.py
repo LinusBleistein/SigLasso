@@ -12,6 +12,7 @@ from src.vector_fields import SimpleVectorField, MultiLayerVectorField, \
 
 warnings.simplefilter('once', UserWarning)
 
+
 # TODO: un propos quelque part sur quoi faire si le nombre de sampling
 #  points des X sont différents d'un individu à l'autre: faire du
 #  remplissage feed-forward car ça ne perturbe pas la signature ?
@@ -51,14 +52,16 @@ class SigLasso:
         self.normalize = normalize
 
     def train(self, X: torch.Tensor, Y: torch.Tensor,
-              grid_Y: torch.Tensor=None, pass_sigs: bool = False):
+              grid_Y: torch.Tensor = None, pass_sigs: bool = False):
         if pass_sigs:
             self.reg.fit(X, Y)
         else:
-            assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, channels"
-            assert Y.ndim == 3, " Y must have 3 dimensions: n_samples, time, channels"
+            assert X.ndim == 3, \
+                "X must have 3 dimensions: n_samples, time, channels"
+            assert Y.ndim == 3, \
+                "Y must have 3 dimensions: n_samples, time, channels"
 
-            # TO DO : problem in normalization: do we do it here or for each subpath ?
+            # TODO : problem in normalization: do we do it here or for each subpath ?
             if self.normalize:
                 X = normalize_path(X)
 
@@ -76,38 +79,39 @@ class SigLasso:
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         if Y.shape[1] == 1:
             return isig.sig(X, self.sig_order), Y[:, 0, :]
-        else:
-            if grid_Y is None:
-                raise ValueError('If Y has more than one observation, the '
-                                 'indices of the observations must be passed.')
-            list_sigXs = []
-            list_Yfinal = []
 
-            grid_Y = grid_Y.numpy().astype(int)
-            for i in range(Y.shape[0]):
-                for j in range(grid_Y.shape[1]):
-                    index_Y = grid_Y[i, j]
+        if grid_Y is None:
+            raise ValueError('If Y has more than one observation, the '
+                             'indices of the observations must be passed.')
+        list_sigXs = []
+        list_Yfinal = []
 
-                    if index_Y == 0:
-                        warnings.warn(
-                            'An observation of Y at time 0 has been skipped '
-                            'since we need at least two observations of X up '
-                            'to observation of Y')
-                    else:
-                        # Signature of the path up to observation time of Y
-                        list_sigXs.append(
+        grid_Y = grid_Y.numpy().astype(int)
+        for i in range(Y.shape[0]):
+            for j in range(grid_Y.shape[1]):
+                index_Y = grid_Y[i, j]
+
+                if index_Y == 0:
+                    warnings.warn(
+                        'An observation of Y at time 0 has been skipped '
+                        'since we need at least two observations of X up '
+                        'to observation of Y')
+                else:
+                    # Signature of the path up to observation time of Y
+                    list_sigXs.append(
                         isig.sig(X[i, :index_Y, :], self.sig_order))
-                        # Y has already been downsampled so you should use j
-                        # and not index_Y here
-                        list_Yfinal.append(Y[i, j, :])
+                    # Y has already been downsampled so you should use j
+                    # and not index_Y here
+                    list_Yfinal.append(Y[i, j, :])
 
-            return torch.from_numpy(np.stack(list_sigXs)), torch.stack(list_Yfinal)
+        return (torch.from_numpy(np.stack(list_sigXs)),
+                torch.stack(list_Yfinal))
 
     def predict(self, X: torch.Tensor, on_grid: torch.Tensor = None,
                 pass_sigs: bool = False) -> torch.Tensor:
         if on_grid is not None:
             assert on_grid.ndim == 2, " grid must have 2 dimensions: " \
-                                      "n_samples, time"
+                                      "(n_samples, time)"
             on_grid = on_grid.numpy().astype(int)
         else:
             # If on_grid has not been passed as argument, we predict Y only at
@@ -116,39 +120,40 @@ class SigLasso:
 
         if pass_sigs:
             return self.reg.predict(X)
-        else:
-            # new_Y = np.zeros((X.shape[0], on_grid.shape[1], self.dim_Y))
 
-            assert X.ndim == 3, " X must have 3 dimensions: " \
-                                "n_samples, time, channels"
-            if self.normalize:
-                X = normalize_path(X)
+        # new_Y = np.zeros((X.shape[0], on_grid.shape[1], self.dim_Y))
 
-            list_pred = []
-            for i in range(X.shape[0]):
-                pred_Y = []
-                for j in range(on_grid.shape[1]):
-                    index_grid = on_grid[i, j]
+        assert X.ndim == 3, " X must have 3 dimensions: " \
+                            "n_samples, time, channels"
+        if self.normalize:
+            X = normalize_path(X)
 
-                    if index_grid == 0:
-                        warnings.warn(
-                            'An observation of Y at time 0 has been skipped '
-                            'since we need at least two observations of X up '
-                            'to observation of Y')
+        list_pred = []
+        for i in range(X.shape[0]):
+            pred_Y = []
+            for j in range(on_grid.shape[1]):
+                index_grid = on_grid[i, j]
+
+                if index_grid == 0:
+                    warnings.warn(
+                        'An observation of Y at time 0 has been skipped '
+                        'since we need at least two observations of X up '
+                        'to observation of Y')
+                else:
+                    sub_X_i = X[i, :index_grid, :]
+                    sigX_i = isig.sig(sub_X_i, self.sig_order).reshape(1,
+                                                                       -1)
+                    if self.weighted:
+                        pred_Y.append(self.reg.predict(
+                            sigX_i @ get_weight_matrix(X.shape[2],
+                                                       self.sig_order)))
                     else:
-                        sub_X_i = X[i, :index_grid, :]
-                        sigX_i = isig.sig(sub_X_i, self.sig_order).reshape(1, -1)
-                        if self.weighted:
-                            pred_Y.append(self.reg.predict(
-                                sigX_i @ get_weight_matrix(X.shape[2],
-                                                         self.sig_order)))
-                        else:
-                            pred_Y.append(self.reg.predict(sigX_i))
-                list_pred.append(np.stack(pred_Y, axis=1).squeeze(0))
-            if self.dim_Y == 1:
-                return torch.from_numpy(np.stack(list_pred)).unsqueeze(-1)
-            else:
-                return torch.from_numpy(np.stack(list_pred))
+                        pred_Y.append(self.reg.predict(sigX_i))
+            list_pred.append(np.stack(pred_Y, axis=1).squeeze(0))
+        if self.dim_Y == 1:
+            return torch.from_numpy(np.stack(list_pred)).unsqueeze(-1)
+        else:
+            return torch.from_numpy(np.stack(list_pred))
 
     def get_l2_error(self, X: torch.Tensor, Y_full: torch.Tensor,
                      grid_Y: torch.Tensor, pass_sigs=False) -> float:
@@ -166,7 +171,8 @@ class SigLasso:
 
 
 class GRUModel(torch.nn.Module):
-    def __init__(self, input_channels: int, hidden_channels: int, output_dim: int,
+    def __init__(self, input_channels: int, hidden_channels: int,
+                 output_dim: int,
                  layer_dim: int = 1):
         super(GRUModel, self).__init__()
 
@@ -214,7 +220,7 @@ class GRUModel(torch.nn.Module):
         for i in range(X.shape[1]):
             out.append(self.fc(hidden_states[:, i, :]))
         Y = torch.stack(out, dim=1)
-        return Y.detach() # Need to detach to later compute l2 distance
+        return Y.detach()  # Need to detach to later compute l2 distance
 
     def get_l2_error(self, X, Y):
         Y_pred = self.predict_trajectory(X)
@@ -255,7 +261,7 @@ class NeuralCDE(torch.nn.Module):
         z_T = z_T[:, 1]
         return z_T
 
-    def get_trajectory(self, X, n_points_Y):
+    def predict_trajectory(self, X):
         coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(
             X)
         Xfunc = torchcde.CubicSpline(coeffs)
@@ -269,6 +275,6 @@ class NeuralCDE(torch.nn.Module):
 
         return Y.detach().numpy()
 
-    def get_l2_error(self, X, Y, time_X, n_points_Y):
-        Y_pred = self.get_trajectory(X, n_points_Y)
+    def get_l2_error(self, X, Y):
+        Y_pred = self.predict_trajectory(X)
         return l2_distance(Y, Y_pred)

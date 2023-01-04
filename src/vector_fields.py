@@ -5,7 +5,7 @@ class SimpleVectorField(torch.nn.Module):
     """
     Simple vector field.
     """
-    def __init__(self, hidden_channels, input_channels, non_linearity=None):
+    def __init__(self, input_channels, hidden_channels, non_linearity=None):
         super(SimpleVectorField, self).__init__()
         super().__init__()
         self.hidden_channels = hidden_channels
@@ -57,7 +57,8 @@ class MultiLayerVectorField(torch.nn.Module):
 
 class OriginalVectorField(torch.nn.Module):
     """
-    Original vector field from "Neural Controlled Differential Equations for Irregular Time Series" (Kidger, 2020).
+    Original vector field from "Neural Controlled Differential Equations for
+    Irregular Time Series" (Kidger, 2020).
     """
     def __init__(self, hidden_channels, input_channels):
         super(OriginalVectorField, self).__init__()
