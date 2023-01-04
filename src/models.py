@@ -7,7 +7,8 @@ from typing import Tuple
 import warnings
 
 from src.utils import l2_distance, normalize_path, get_weight_matrix
-from src.vector_fields import SimpleVectorField
+from src.vector_fields import SimpleVectorField, MultiLayerVectorField, \
+    OriginalVectorField
 
 warnings.simplefilter('once', UserWarning)
 
@@ -204,7 +205,6 @@ class GRUModel(torch.nn.Module):
         return l2_distance(Y, Y_pred)
 
 
-
 class NeuralCDE(torch.nn.Module):
     def __init__(self, input_channels, hidden_channels, interpolation="cubic",
                  activation='Tanh', vector_field='simple', width=None,
@@ -254,5 +254,5 @@ class NeuralCDE(torch.nn.Module):
         return Y.detach().numpy()
 
     def get_l2_error(self, X, Y, time_X, n_points_Y):
-        Y_pred = self.get_trajectory(X, time_X, n_points_Y)
+        Y_pred = self.get_trajectory(X, n_points_Y)
         return l2_distance(Y, Y_pred)
