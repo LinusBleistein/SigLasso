@@ -6,11 +6,10 @@ from src.utils import split_XY_on_grid
 
 def train_gru(
         model: GRUModel,
-        X_raw: torch.Tensor,
+        X_raw: list,
         Y_raw: torch.Tensor,
         num_epochs: int,
         lr: float = 0.001,
-        batch_size: int = 1, # Use a batch_size of 1 to allow for variable length sequences
         grid_Y: torch.Tensor = None):
 
     # Split the paths in case Y is observed at several time points
