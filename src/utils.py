@@ -48,6 +48,55 @@ def split_XY_on_grid(X: torch.Tensor, Y: torch.Tensor,
         return list_Xs, torch.stack(list_Yfinal)
 
 
+def fill_forward(X , max_length):
+    return torch.cat(
+        [X, X[-1].unsqueeze(0).expand(max_length - X.size(0), X.size(1))])
+
+
+def split_and_fill_XY_on_grid(X, Y, grid_Y):
+    """
+    This function takes as input a tensor of feature time series measurements, a tensor of target time series
+    measurements, and a matrix of indexes of measurement times of the target.
+
+    It ouputs a feature tensor in which every submatrix is a feature time series sampled up to the corresponding
+    measurement time of the target. The submatrix is completed using fillfoward as specified here:
+    https://github.com/patrick-kidger/torchcde/blob/master/example/irregular_data.py
+
+    X: feature time series
+    Y: target time series
+    grid_Y: index of the timepoints at which Y is measured. Must be common with points in time where X is measured.
+    Be careful to pass indexes and not measurement times themselves.
+    """
+    if Y.shape[1] == 1:
+        return X, Y
+    if Y.dim() != 3:
+        warnings.warn(
+            'Y should have three dimensions '
+            '[individuals, measurements, dimensions].')
+
+    grid_Y = grid_Y.numpy().astype(int)
+    if Y.shape[1] > 1:
+        if grid_Y.shape[1] != Y.shape[1]:
+            warnings.warn(
+                'There should be as many measurement time indexes in grid_Y '
+                'as measurements in Y.')
+        # Y must have 3 dimensions: [individual,measurements,dimensions]
+        # grid_Y gives the indexes of the samping times of Y
+        max_length = int(grid_Y[:, -1].max())
+
+        # max measurement index of Y: it is the time horizon until which
+        # we will have to fill forward for all individuals.
+        new_X = torch.empty((Y.shape[0] * Y.shape[1], max_length, X.shape[2]))
+        i = 0
+        for individual in np.arange(Y.shape[0]):
+            for j, time in enumerate(grid_Y[individual, :]):
+                feature_ts = X[individual, :time, :]
+                feature_ts_filled = fill_forward(feature_ts, max_length)
+                new_X[i, :, :] = feature_ts_filled
+                i += 1
+        return new_X, Y.reshape(-1, Y.shape[2])
+
+
 def get_cfi(theta,feature,dim,order):
     """
     Computes the normalized CFI of feature i (numbering of features starts at 0).
@@ -258,7 +307,7 @@ def l2_distance(X, Y):
 
 def mse_last_point(X, Y):
     """
-    X and Y must be of shape (n_samples, n_points, dim)
+    X and Y must be of shape (n_samples, n_points, channels)
 
     """
     return np.mean(

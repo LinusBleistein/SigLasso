@@ -3,9 +3,48 @@ import os
 import pandas as pd
 from sacred.observers import FileStorageObserver
 from sklearn.model_selection import ParameterGrid
+import torch
+
+from src.datagen import get_train_val_test
 
 
-def gridsearch(ex, config_grid, dirname, niter=10):
+def simulate_and_save_data(data_config, data_path):
+    X_raw_train, Y_raw_train, X_raw_val, Y_raw_val, X_raw_test, Y_raw_test = \
+        get_train_val_test(
+            data_config['model_X'],
+            data_config['model_Y'],
+            data_config['n_train'],
+            data_config['n_val'],
+            data_config['n_test'],
+            data_config['n_points_true'],
+            dim_X=data_config['dim_X'],
+            dim_Y=data_config['dim_Y'],
+            non_linearity_Y=data_config['non_linearity_Y']
+        )
+
+    torch.save(X_raw_train, f"{data_path}/X_raw_train.pt")
+    torch.save(Y_raw_train, f"{data_path}/Y_raw_train.pt")
+    torch.save(X_raw_val, f"{data_path}/X_raw_val.pt")
+    torch.save(Y_raw_val, f"{data_path}/Y_raw_val.pt")
+    torch.save(X_raw_test, f"{data_path}/X_raw_test.pt")
+    torch.save(Y_raw_test, f"{data_path}/Y_raw_test.pt")
+    
+    return data_path
+
+
+def load_data(data_path):
+    X_raw_train = torch.load(f"{data_path}/X_raw_train.pt")
+    Y_raw_train = torch.load(f"{data_path}/Y_raw_train.pt")
+    X_raw_val = torch.load(f"{data_path}/X_raw_val.pt")
+    Y_raw_val = torch.load(f"{data_path}/Y_raw_val.pt")
+    X_raw_test = torch.load(f"{data_path}/X_raw_test.pt")
+    Y_raw_test = torch.load(f"{data_path}/Y_raw_test.pt")
+    
+    return (X_raw_train, Y_raw_train, X_raw_val, Y_raw_val, X_raw_test, 
+            Y_raw_test)
+
+
+def gridsearch(ex, config, BASE_DIR):
     """Loops over all the experiments in a configuration grid.
     Parameters
     ----------
@@ -18,10 +57,21 @@ def gridsearch(ex, config_grid, dirname, niter=10):
         dirname: str, default='my_runs'
             Location of the directory where the experiments outputs are stored.
     """
-    ex.observers.append(FileStorageObserver(dirname))
-    exp_grid = list(ParameterGrid(config_grid))
+    niter = config['niter']
+
+    results_path = os.path.join(BASE_DIR, f"results/{config['name']}")
+    data_path = os.path.join(BASE_DIR, f"data/{config['name']}")
+
+    os.makedirs(results_path, exist_ok=True)
+    os.makedirs(data_path, exist_ok=True)
+
+    ex.observers.append(FileStorageObserver(results_path))
+    exp_grid = list(ParameterGrid(config['exp_config']))
+
     for i in range(niter):
+        simulate_and_save_data(config['data_config'], data_path)
         for params in exp_grid:
+            params['data_path'] = data_path
             ex.run(config_updates=params, info={})
 
 

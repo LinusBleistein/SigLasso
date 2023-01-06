@@ -23,7 +23,7 @@ warnings.simplefilter('once', UserWarning)
 
 
 class SigLasso:
-    def __init__(self, sig_order: int, dim_Y, max_iter=int(1e3),
+    def __init__(self, sig_order: int, dim_Y, max_iter=1e3,
                  normalize=True, weighted=False,
                  alpha_grid: np.ndarray = 10 ** np.linspace(-7, 1, 50)):
         """
@@ -45,6 +45,8 @@ class SigLasso:
 
         self.dim_Y = dim_Y
         if self.dim_Y == 1:
+            print(self.alpha_grid)
+            print(int(max_iter))
             self.reg = LassoCV(alphas=self.alpha_grid, max_iter=int(max_iter))
         else:
             self.reg = MultiTaskLassoCV(alphas=self.alpha_grid,
@@ -114,9 +116,9 @@ class SigLasso:
                                       "(n_samples, time)"
             on_grid = on_grid.numpy().astype(int)
         else:
-            # If on_grid has not been passed as argument, we predict Y only at
-            # the last time step
-            on_grid = np.tile([X.shape[1]], (X.shape[0], 1))
+            # If on_grid has not been passed as argument, we predict Y at
+            # all points of X
+            on_grid = np.tile(np.arange(X.shape[1]), (X.shape[0], 1))[:, 1:]
 
         if pass_sigs:
             return self.reg.predict(X)
@@ -229,7 +231,7 @@ class GRUModel(torch.nn.Module):
 
 class NeuralCDE(torch.nn.Module):
     def __init__(self, input_channels, hidden_channels, interpolation="cubic",
-                 activation='Tanh', vector_field='simple', width=None,
+                 activation='Tanh', vector_field='original', width=None,
                  depth=None):
         super(NeuralCDE, self).__init__()
         if vector_field == 'simple':
@@ -247,45 +249,6 @@ class NeuralCDE(torch.nn.Module):
         self.initial = torch.nn.Linear(input_channels, hidden_channels)
         # self.readout = torch.nn.Linear(hidden_channels, output_channels)
         self.interpolation = interpolation
-
-    def fill_forward(self,x,max_length):
-        return torch.cat([x, x[-1].unsqueeze(0).expand(max_length - x.size(0), x.size(1))])
-
-    def get_final_tensor(self,X, Y, grid_Y):
-        """
-        This function takes as input a tensor of feature time series measurements, a tensor of target time series
-        measurements, and a matrix of indexes of measurement times of the target.
-
-        It ouputs a feature tensor in which every submatrix is a feature time series sampled up to the corresponding
-        measurement time of the target. The submatrix is completed using fillfoward as specified here:
-        https://github.com/patrick-kidger/torchcde/blob/master/example/irregular_data.py
-
-        X: feature time series
-        Y: target time series
-        grid_Y: index of the timepoints at which Y is measured. Must be common with points in time where X is measured.
-        Be careful to pass indexes and not measurement times themselves.
-        """
-        if Y.shape[1] == 1:
-            return X, Y
-        if Y.dim() != 3:
-            warnings.warn('Y should have three dimensions [individuals, measurements, dimensions].')
-        if Y.shape[1] > 1:
-            if grid_Y.shape[1] != Y.shape[1]:
-                warnings.warn('There should be as many measurement time indexes in grid_Y as measurements in Y.')
-            # Y must have 3 dimensions: [individual,measurements,dimensions]
-            # grid_Y gives the indexes of the samping times of Y
-            max_length = int(torch.max(grid_Y[:, -1]))
-            # max measurement index of Y: it is the time horizon until which we will have to
-            # fill forward for all individuals.
-            new_X = torch.empty((Y.shape[0] * Y.shape[1], max_length, X.shape[2]))
-            i = 0
-            for individual in np.arange(Y.shape[0]):
-                for j, time in enumerate(grid_Y[individual, :]):
-                    feature_ts = X[individual, :time, :]
-                    feature_ts_filled = self.fill_forward(feature_ts, max_length)
-                    new_X[i, :, :] = feature_ts_filled
-                    i += 1
-            return new_X, Y.reshape(-1, Y.shape[2])
 
     def forward(self, X):
         coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(

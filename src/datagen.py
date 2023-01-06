@@ -122,7 +122,7 @@ class CDEModel():
         self.Y0 = torch.randn(dim_Y)
 
     def get_Y(self, X: torch.Tensor, time: torch.Tensor,
-              interpolation_method: str = 'linear', with_noise: bool = True,
+              interpolation_method: str = 'cubic', with_noise: bool = True,
               noise_Y_var: float = 0.01):
         """
         Samples Y from X
