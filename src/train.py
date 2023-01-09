@@ -42,7 +42,6 @@ def train_neural_cde(model, X_raw, Y_raw, num_epochs, lr=0.001, batch_size=32,
 
     # Split the paths in case Y is observed at several time points
     X, Y = split_and_fill_XY_on_grid(X_raw, Y_raw, grid_Y=grid_Y)
-    print(X.shape, Y.shape)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 

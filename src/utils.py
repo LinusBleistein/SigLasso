@@ -27,6 +27,9 @@ def split_XY_on_grid(X: torch.Tensor, Y: torch.Tensor,
         if grid_Y is None:
             raise ValueError('If Y has more than one observation, the '
                                  'indices of the observations must be passed.')
+        assert grid_Y.shape[1] == Y.shape[1], "There should be as many " \
+                                              "measurement time indexes in " \
+                                              "grid_Y as measurements in Y."
         list_Xs = []
         list_Yfinal = []
 
@@ -48,7 +51,7 @@ def split_XY_on_grid(X: torch.Tensor, Y: torch.Tensor,
         return list_Xs, torch.stack(list_Yfinal)
 
 
-def fill_forward(X , max_length):
+def fill_forward(X, max_length):
     return torch.cat(
         [X, X[-1].unsqueeze(0).expand(max_length - X.size(0), X.size(1))])
 
@@ -67,34 +70,22 @@ def split_and_fill_XY_on_grid(X, Y, grid_Y):
     grid_Y: index of the timepoints at which Y is measured. Must be common with points in time where X is measured.
     Be careful to pass indexes and not measurement times themselves.
     """
-    if Y.shape[1] == 1:
-        return X, Y
-    if Y.dim() != 3:
-        warnings.warn(
-            'Y should have three dimensions '
-            '[individuals, measurements, dimensions].')
 
-    grid_Y = grid_Y.numpy().astype(int)
-    if Y.shape[1] > 1:
-        if grid_Y.shape[1] != Y.shape[1]:
-            warnings.warn(
-                'There should be as many measurement time indexes in grid_Y '
-                'as measurements in Y.')
-        # Y must have 3 dimensions: [individual,measurements,dimensions]
-        # grid_Y gives the indexes of the samping times of Y
-        max_length = int(grid_Y[:, -1].max())
+    # Split sampled to be observed up to observations of Y
+    list_Xs, Y_final = split_XY_on_grid(X, Y, grid_Y)
 
-        # max measurement index of Y: it is the time horizon until which
-        # we will have to fill forward for all individuals.
-        new_X = torch.empty((Y.shape[0] * Y.shape[1], max_length, X.shape[2]))
-        i = 0
-        for individual in np.arange(Y.shape[0]):
-            for j, time in enumerate(grid_Y[individual, :]):
-                feature_ts = X[individual, :time, :]
-                feature_ts_filled = fill_forward(feature_ts, max_length)
-                new_X[i, :, :] = feature_ts_filled
-                i += 1
-        return new_X, Y.reshape(-1, Y.shape[2])
+    # Compute the maximum length of the Xs: it is the time horizon until which
+    # we will have to fill forward for all individuals.
+    max_length = 0
+    for i in range(len(list_Xs)):
+        if list_Xs[i].shape[0] > max_length:
+            max_length = list_Xs[i].shape[0]
+
+    list_filled_Xs = []
+    for i in range(len(list_Xs)):
+        list_filled_Xs.append(fill_forward(list_Xs[i], max_length))
+
+    return torch.stack(list_filled_Xs), Y_final
 
 
 def get_cfi(theta,feature,dim,order):

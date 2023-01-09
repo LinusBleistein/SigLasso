@@ -1,5 +1,6 @@
 import iisignature as isig
 import numpy as np
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LassoCV, MultiTaskLassoCV
 import torch
 import torchcde
@@ -10,7 +11,10 @@ from src.utils import l2_distance, normalize_path, get_weight_matrix
 from src.vector_fields import SimpleVectorField, MultiLayerVectorField, \
     OriginalVectorField
 
+# Remove some warnings
 warnings.simplefilter('once', UserWarning)
+warnings.simplefilter("ignore", category=ConvergenceWarning)
+
 
 
 # TODO: un propos quelque part sur quoi faire si le nombre de sampling
@@ -21,10 +25,12 @@ warnings.simplefilter('once', UserWarning)
 
 # TODO: résoudre la question de Y au temps 0
 
+#TODO: check shape of signature not too large, otherwise pass
+
 
 class SigLasso:
     def __init__(self, sig_order: int, dim_Y, max_iter=1e3,
-                 normalize=True, weighted=False,
+                 normalize: bool = True, weighted: bool = False,
                  alpha_grid: np.ndarray = 10 ** np.linspace(-7, 1, 50)):
         """
         Parameters
@@ -45,8 +51,6 @@ class SigLasso:
 
         self.dim_Y = dim_Y
         if self.dim_Y == 1:
-            print(self.alpha_grid)
-            print(int(max_iter))
             self.reg = LassoCV(alphas=self.alpha_grid, max_iter=int(max_iter))
         else:
             self.reg = MultiTaskLassoCV(alphas=self.alpha_grid,
@@ -268,7 +272,7 @@ class NeuralCDE(torch.nn.Module):
             X)
         Xfunc = torchcde.CubicSpline(coeffs)
 
-        time_Y = torch.linspace(0, Xfunc.interval[1], 100)
+        time_Y = torch.linspace(0, Xfunc.interval[1], X.shape[1])
 
         X0 = Xfunc.evaluate(Xfunc.interval[0])
         z0 = self.initial(X0)
