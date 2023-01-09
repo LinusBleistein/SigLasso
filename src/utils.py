@@ -157,7 +157,7 @@ def get_weights(dim_X,order):
     weight_vector = np.ones(isig.siglength(dim_X, order))
     position = 1
     for j in range(1, order+1):
-        factor = math.sqrt(j) / math.factorial(j)
+        factor = math.factorial(j) / math.sqrt(j)
         weight_vector[position:position + dim_X ** j] *= factor
         position += dim_X ** j
     return weight_vector
@@ -207,23 +207,24 @@ def matrix_to_function(X, time, interpolation_method):
     #             X[i, :, :], t=time[i, :])
 
 
-def normalize_path(df):
+def normalize_path(X):
     """
-    Normalizes the paths contained in df by their total variation norm.
+    Normalizes the paths contained in X by their total variation norm.
     Parameters
     ----------
-    df: dataframe of paths.
+    X: dataframe of paths.
 
     Returns
     -------
     Normalized dataframe of paths.
     """
-    n_sample = df.shape[0]
-    df_copy = df.detach().clone()
-    tv_norm = torch.linalg.norm(df_copy[:, 1:, :] - df_copy[:, :-1, :], axis=1).sum(axis=1)
+    n_sample = X.shape[0]
+    X_copy = X.detach().clone()
+    tv_norm = torch.linalg.norm(
+        X_copy[:, 1:, :] - X_copy[:, :-1, :], axis=2).sum(axis=1)
     for i in np.arange(n_sample):
-        df_copy[i, :, :] *= 1/tv_norm[i]
-    return df_copy
+        X_copy[i, :, :] *= 1/ (0.9 * tv_norm[i])
+    return X_copy
 
 
 def add_noise(df,variance):
@@ -288,9 +289,9 @@ def recontruct_Y(reg, X, length_Y, order):
 
 def l2_distance(X, Y):
     """
-    X and Y must be of shape (n_samples, n_points, dim)
+    X and Y must be of shape (n_samples, n_points, channels)
 
-    constant, not piecewise linear as we usually do in the theorems -> check this.
+   #TODO: ça ne va pas du tout cette formule
 
     """
     return np.mean(np.linalg.norm((np.array(X) - np.array(Y)) ** 2, axis=2))

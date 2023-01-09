@@ -30,8 +30,7 @@ warnings.simplefilter("ignore", category=ConvergenceWarning)
 
 class SigLasso:
     def __init__(self, sig_order: int, dim_Y, max_iter=1e3,
-                 normalize: bool = True, weighted: bool = False,
-                 alpha_grid: np.ndarray = 10 ** np.linspace(-7, 1, 50)):
+                 normalize: bool = True, weighted: bool = False):
         """
         Parameters
         ----------
@@ -45,16 +44,13 @@ class SigLasso:
         penalization.
         """
         self.sig_order = sig_order
-        self.alpha_grid = alpha_grid
-
         self.weighted = weighted
 
         self.dim_Y = dim_Y
         if self.dim_Y == 1:
-            self.reg = LassoCV(alphas=self.alpha_grid, max_iter=int(max_iter))
+            self.reg = LassoCV(max_iter=int(max_iter))
         else:
-            self.reg = MultiTaskLassoCV(alphas=self.alpha_grid,
-                                        max_iter=int(max_iter))
+            self.reg = MultiTaskLassoCV(max_iter=int(max_iter))
         self.normalize = normalize
 
     def train(self, X: torch.Tensor, Y: torch.Tensor,
@@ -66,10 +62,6 @@ class SigLasso:
                 "X must have 3 dimensions: n_samples, time, channels"
             assert Y.ndim == 3, \
                 "Y must have 3 dimensions: n_samples, time, channels"
-
-            # TODO : problem in normalization: do we do it here or for each subpath ?
-            if self.normalize:
-                X = normalize_path(X)
 
             sigX, Yfinal = self.get_final_matrices(X, Y, grid_Y=grid_Y)
 
@@ -83,6 +75,11 @@ class SigLasso:
     def get_final_matrices(
             self, X: torch.Tensor, Y: torch.Tensor, grid_Y: torch.Tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+
+        # TODO : problem in normalization: do we do it here or for each subpath ?
+        if self.normalize:
+            X = normalize_path(X)
+
         if Y.shape[1] == 1:
             return isig.sig(X, self.sig_order), Y[:, 0, :]
 

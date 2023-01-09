@@ -43,6 +43,7 @@ def load_data(data_path):
     return (X_raw_train, Y_raw_train, X_raw_val, Y_raw_val, X_raw_test, 
             Y_raw_test)
 
+#TODO: move to experiment_1 and rename: this is the main function and should not be in utils
 
 def gridsearch(ex, config, BASE_DIR):
     """Loops over all the experiments in a configuration grid.
@@ -84,6 +85,7 @@ def load_json(path):
     """
     with open(path) as file:
         return json.load(file)
+
 
 def extract_config(loc):
     """ Extracts the metrics from the directory."""

@@ -132,10 +132,8 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
                 lasso_sig = SigLasso(
                     sig_order,
                     Y_train.shape[2],
-                    model_hyperparams['lasso']['alpha_grid'],
                     normalize=model_hyperparams['lasso']['normalize'],
-                    weighted=model_hyperparams['lasso']['weighted'],
-                    alpha_grid=model_hyperparams['lasso']['alpha_grid']
+                    weighted=model_hyperparams['lasso']['weighted']
                 )
                 lasso_sig.train(X_train, Y_train, grid_Y_train)
 
@@ -153,7 +151,6 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
             lasso_sig = SigLasso(
                 best_sig_order,
                 Y_train.shape[2],
-                model_hyperparams['lasso']['alpha_grid'],
                 normalize=model_hyperparams['lasso']['normalize'],
                 weighted=model_hyperparams['lasso']['weighted']
             )
