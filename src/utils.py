@@ -291,9 +291,9 @@ def l2_distance(X, Y):
     """
     X and Y must be of shape (n_samples, n_points, channels)
     """
-    return np.mean(
+    return np.mean(np.mean(
         np.linalg.norm((np.array(X) - np.array(Y)), axis=2) ** 2,
-        axis=1)
+        axis=1))
 
 
 def mse_last_point(X, Y):
