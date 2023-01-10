@@ -28,6 +28,18 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
         X = Xfunc.evaluate(torch.linspace(0, 1, n_points))
         return X
 
+    if model_X == 'brownian':
+        t = torch.linspace(0,1,n_points)
+        bm = BrownianMotion(t=10,scale=0.1)
+        sample = torch.empty((n_samples,n_points,dim_X))
+        for i in np.arange(n_samples):
+            brownian_sample = torch.tensor([bm.sample_at(t) for i in np.arange(dim_X-1)]).T
+            sample[i,:,1:] = brownian_sample
+            sample[i,:,0] = t
+
+        return sample
+
+
     if model_X == 'squared_brownian':
         t = torch.linspace(0, 10, n_points)
         bm = BrownianMotion(t=10)
@@ -56,8 +68,30 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
     else:
         raise NotImplementedError(
             f"{model_X} not implemented. Accepted values for model_X are "
-            f"'cubic_diffusion', 'squared_brownian', and 'cubic' ")
+            f"'cubic_diffusion', 'squared_brownian', 'brownian' and 'cubic' ")
 
+
+class OrnsteinUhlenbeck:
+    def __init__(self,theta,mu,omega):
+        self.theta = theta
+        self.mu = mu
+        self.omega = omega
+        self.Y0 = torch.randn(1)
+
+    def get_Y(self,X):
+
+        sample = torch.empty((X.shape[0],X.shape[1],1))
+        time_grid = X[0,:,0]
+        dt = time_grid[1]-time_grid[0]
+
+        for i in np.arange(X.shape[0]):
+            y = self.Y0.clone()
+            sample[i,0] = y
+            for j,t in enumerate(time_grid[:-1]):
+                y += self.theta*(self.mu-y)*dt + self.omega@(X[i,j+1,1:]-X[i,j,1:])
+                sample[i,j+1] = y
+
+        return sample
 
 class TumorGrowth:
     def __init__(self, lambda_0=0.9, lambda_1=0.7, k_1=10, k_2=0.5, psi=20):
