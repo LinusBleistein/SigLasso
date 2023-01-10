@@ -40,7 +40,6 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
         return x_
 
     elif model_X == 'cubic_diffusion':
-
         t = torch.linspace(0, 1, n_points)
         t_ = t.unsqueeze(0).unsqueeze(-1).expand(
             n_samples, n_points, 1)
@@ -122,7 +121,7 @@ class CDEModel():
         self.Y0 = torch.randn(dim_Y)
 
     def get_Y(self, X: torch.Tensor, time: torch.Tensor,
-              interpolation_method: str = 'cubic', with_noise: bool = True,
+              interpolation_method: str = 'cubic', with_noise: bool = False,
               noise_Y_var: float = 0.01):
         """
         Samples Y from X
