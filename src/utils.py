@@ -291,16 +291,36 @@ def l2_distance(X, Y):
     """
     X and Y must be of shape (n_samples, n_points, channels)
     """
-    return np.mean(np.mean(
-        np.linalg.norm((np.array(X) - np.array(Y)), axis=2) ** 2,
-        axis=1))
-
-
-def mse_last_point(X, Y):
-    """
-    X and Y must be of shape (n_samples, n_points, channels)
-
-    """
     return np.mean(
-        np.linalg.norm(
-            np.array(X[:, -1, :]) - np.array(Y[:, -1, :]), axis=1) ** 2)
+        np.mean(
+            np.linalg.norm((np.array(X) - np.array(Y)), axis=2) ** 2,
+            axis=1) * (1 / 2)
+    )
+
+
+def mse_on_grid(X_1, X_2, grid_1=None, grid_2=None):
+    """
+    X_1 and X_2 must be of shape (n_samples, n_points_X_1/X_2, channels).
+    X_1 can be differentely sampled than X_2, in which case grids must be passed
+    If not None, grid_2 must be of shape (n_samples, n_points_grid)
+    we must have grid_2 subset of grid_1
+
+    """
+    if grid_2 is None:
+        # If on_grid is None, compute the mse at the last point
+        return np.mean(
+            np.linalg.norm(
+                np.array(X_1[:, -1, :]) - np.array(X_2[:, -1, :]), axis=1) ** 2)
+    else:
+        grid_2 = grid_2.numpy().astype(int)
+        mse_values = []
+        for i in range(X_1.shape[0]):
+            mse_sample_i = []
+            for j in range(len(grid_2[i, :])):
+                pos_X_1 = np.where(grid_1[i, :] == grid_2[i, j])
+                mse_sample_i.append(
+                    np.linalg.norm(
+                        np.array(X_1[:, pos_X_1, :]) - np.array(X_2[:, j, :]),
+                        axis=1) ** 2)
+            mse_values.append(np.mean(mse_sample_i))
+        return np.mean(mse_values)

@@ -13,7 +13,7 @@ from configs import *
 from src.models import GRUModel, NeuralCDE, SigLasso
 from src.sampling import downsample
 from src.train import train_gru, train_neural_cde
-from src.utils import l2_distance, mse_last_point
+from src.utils import l2_distance, mse_on_grid
 from src.utils_exp import load_data
 from src import utils_exp
 
@@ -82,9 +82,9 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
                             l2_distance(Y_test_pred, Y_raw_test))
 
             _run.log_scalar(f'mse_last_point_train_{model}',
-                            mse_last_point(Y_train_pred, Y_raw_train))
+                            mse_on_grid(Y_train_pred, Y_raw_train))
             _run.log_scalar(f'mse_last_point_test_{model}',
-                            mse_last_point(Y_test_pred, Y_raw_test))
+                            mse_on_grid(Y_test_pred, Y_raw_test))
 
             _run.log_scalar(f'time_{model}', time_2 - time_1)
             _run.log_scalar(f'best_lr_{model}', lr)
@@ -118,9 +118,9 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
                             l2_distance(Y_test_pred, Y_raw_test))
 
             _run.log_scalar(f'mse_last_point_train_{model}',
-                            mse_last_point(Y_train_pred, Y_raw_train))
+                            mse_on_grid(Y_train_pred, Y_raw_train))
             _run.log_scalar(f'mse_last_point_test_{model}',
-                            mse_last_point(Y_test_pred, Y_raw_test))
+                            mse_on_grid(Y_test_pred, Y_raw_test))
 
             _run.log_scalar(f'time_{model}', time_2 - time_1)
             _run.log_scalar(f'best_lr_{model}', lr)
@@ -137,13 +137,14 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
                 )
                 lasso_sig.train(X_train, Y_train, grid_Y_train)
 
-                Y_val_pred_last = lasso_sig.predict(X_val)
+                Y_val_pred = lasso_sig.predict(X_val)
 
-                # print(f'Lasso val output: {Y_val_pred_last.shape}')
+                print(f'Lasso val output: {Y_val_pred.shape}')
                 # The best signature order is selected as the one minimizing
                 # the mse at the last time step of Y_val
                 val_mse.append(
-                    mse_last_point(Y_val, Y_val_pred_last))
+                    mse_on_grid(Y_val_pred, Y_val,
+                                grid_1=grid_X_val, grid_2=grid_Y_val))
 
             best_sig_order = model_hyperparams['lasso']['sig_order'][
                 np.argmin(val_mse)]
@@ -164,16 +165,17 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
 
             # print(f'SigLasso: Y_train_pred.shape={Y_train_pred.shape}')
 
+            _run.log_scalar(f'val_mse_array_{model}', val_mse)
             _run.log_scalar(
                 f'l2_train_{model}',
-                l2_distance(Y_train_pred, Y_raw_train[:, 1:, :])) # First point of Y cannot be predicted
+                l2_distance(Y_train_pred, Y_raw_train))
             _run.log_scalar(f'l2_test_{model}',
-                            l2_distance(Y_test_pred, Y_raw_test[:, 1:, :]))
+                            l2_distance(Y_test_pred, Y_raw_test))
 
             _run.log_scalar(f'mse_last_point_train_{model}',
-                            mse_last_point(Y_train_pred, Y_raw_train))
+                            mse_on_grid(Y_train_pred, Y_raw_train))
             _run.log_scalar(f'mse_last_point_test_{model}',
-                            mse_last_point(Y_test_pred, Y_raw_test))
+                            mse_on_grid(Y_test_pred, Y_raw_test))
 
             _run.log_scalar(f'time_{model}', time_2 - time_1)
             _run.log_scalar(f'lasso_best_alpha', lasso_sig.reg.alpha_)

@@ -16,6 +16,7 @@ warnings.simplefilter('once', UserWarning)
 warnings.simplefilter("ignore", category=ConvergenceWarning)
 
 
+# TODO: vérifier si la signature sort un 1 au début et si on n'a pas 2 intercepts
 
 # TODO: un propos quelque part sur quoi faire si le nombre de sampling
 #  points des X sont différents d'un individu à l'autre: faire du
@@ -65,6 +66,10 @@ class SigLasso:
 
             sigX, Yfinal = self.get_final_matrices(X, Y, grid_Y=grid_Y)
 
+            # In the 1d case, LassoCV raises an error when Y is 2d
+            if self.dim_Y == 1:
+                Yfinal = Yfinal.squeeze(-1)
+
             if self.weighted:
                 self.reg.fit(
                     sigX @ get_weight_matrix(X.shape[2], self.sig_order),
@@ -77,10 +82,10 @@ class SigLasso:
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         # TODO : problem in normalization: do we do it here or for each subpath ?
-        if self.normalize:
-            X = normalize_path(X)
 
         if Y.shape[1] == 1:
+            if self.normalize:
+                X = normalize_path(X)
             return isig.sig(X, self.sig_order), Y[:, 0, :]
 
         if grid_Y is None:
@@ -101,8 +106,12 @@ class SigLasso:
                         'to observation of Y')
                 else:
                     # Signature of the path up to observation time of Y
+                    sub_X_i = X[i, :index_Y, :]
+                    if self.normalize:
+                        sub_X_i = normalize_path(sub_X_i.unsqueeze(0)).squeeze(0)
+
                     list_sigXs.append(
-                        isig.sig(X[i, :index_Y, :], self.sig_order))
+                        isig.sig(sub_X_i, self.sig_order))
                     # Y has already been downsampled so you should use j
                     # and not index_Y here
                     list_Yfinal.append(Y[i, j, :])
@@ -119,7 +128,7 @@ class SigLasso:
         else:
             # If on_grid has not been passed as argument, we predict Y at
             # all points of X
-            on_grid = np.tile(np.arange(X.shape[1]), (X.shape[0], 1))[:, 1:]
+            on_grid = np.tile(np.arange(X.shape[1]), (X.shape[0], 1))
 
         if pass_sigs:
             return self.reg.predict(X)
@@ -138,10 +147,7 @@ class SigLasso:
                 index_grid = on_grid[i, j]
 
                 if index_grid == 0:
-                    warnings.warn(
-                        'An observation of Y at time 0 has been skipped '
-                        'since we need at least two observations of X up '
-                        'to observation of Y')
+                    pred_Y.append([self.reg.intercept_])
                 else:
                     sub_X_i = X[i, :index_grid, :]
                     sigX_i = isig.sig(sub_X_i, self.sig_order).reshape(1,
