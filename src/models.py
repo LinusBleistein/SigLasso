@@ -82,10 +82,10 @@ class SigLasso:
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         # TODO : problem in normalization: do we do it here or for each subpath ?
-        if self.normalize:
-            X = normalize_path(X)
 
         if Y.shape[1] == 1:
+            if self.normalize:
+                X = normalize_path(X)
             return isig.sig(X, self.sig_order), Y[:, 0, :]
 
         if grid_Y is None:
@@ -106,8 +106,12 @@ class SigLasso:
                         'to observation of Y')
                 else:
                     # Signature of the path up to observation time of Y
+                    sub_X_i = X[i, :index_Y, :]
+                    if self.normalize:
+                        sub_X_i = normalize_path(sub_X_i.unsqueeze(0)).squeeze(0)
+
                     list_sigXs.append(
-                        isig.sig(X[i, :index_Y, :], self.sig_order))
+                        isig.sig(sub_X_i, self.sig_order))
                     # Y has already been downsampled so you should use j
                     # and not index_Y here
                     list_Yfinal.append(Y[i, j, :])
