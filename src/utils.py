@@ -290,11 +290,10 @@ def recontruct_Y(reg, X, length_Y, order):
 def l2_distance(X, Y):
     """
     X and Y must be of shape (n_samples, n_points, channels)
-
-   #TODO: ça ne va pas du tout cette formule
-
     """
-    return np.mean(np.linalg.norm((np.array(X) - np.array(Y)) ** 2, axis=2))
+    return np.mean(
+        np.linalg.norm((np.array(X) - np.array(Y)), axis=2) ** 2,
+        axis=1)
 
 
 def mse_last_point(X, Y):
