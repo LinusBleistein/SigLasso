@@ -21,7 +21,6 @@ test = {
             'model_names': [['ncde', 'lasso', 'gru']],
             'model_hyperparams': [{
                 'lasso': {
-                    'alpha_grid': 10 ** np.linspace(-5, 5, 50),
                     'sig_order': [3],
                     'normalize': True,
                     'weighted': True,
@@ -41,10 +40,10 @@ test = {
 
 grid_n_points_Y = {
         'niter': 1,
-        'name': 'grid_n_points_Y_lasso_no_norm',
+        'name': 'grid_n_points_Y',
         'data_config': {
             'model_X': 'cubic',
-            'model_Y': 'cde',
+            'model_Y': 'lognorm',
             'n_train': 50,
             'n_test': 50,
             'n_val': 50,
@@ -54,13 +53,13 @@ grid_n_points_Y = {
             'non_linearity_Y': 'Tanh',
         },
         'exp_config': {
-            'n_points_X': [100], #TODO: check somewhere that n_points_X > n_points_true +2
-            'n_points_Y': [0, 1, 2, 3, 4, 5],
-            'model_names': [['lasso']],
+            'n_points_X': [100],
+            'n_points_Y': [0, 1, 2, 3, 4, 20],
+            'model_names': [['lasso', 'ncde', 'gru']],
             'model_hyperparams': [{
                 'lasso': {
-                    'sig_order': [1, 2, 3, 4, 5],
-                    'normalize': False,
+                    'sig_order': [1, 2, 3, 4],
+                    'normalize': True,
                     'weighted': True,
                 },
                 'ncde': {
