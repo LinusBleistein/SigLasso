@@ -1,8 +1,6 @@
-import numpy as np
-
 
 test = {
-        'niter': 1,
+        'niter': 4,
         'name': 'test',
         'data_config': {
             'model_X': 'cubic',
@@ -40,13 +38,13 @@ test = {
 
 y_sampling = {
         'niter': 1,
-        'name': 'grid_n_points_Y',
+        'name': 'y_sampling_data_cde',
         'data_config': {
             'model_X': 'cubic',
-            'model_Y': 'lognorm',
-            'n_train': 100,
-            'n_test': 200,
-            'n_val': 200,
+            'model_Y': 'cde',
+            'n_train': 50,
+            'n_test': 50,
+            'n_val': 50,
             'n_points_true': 1000,
             'dim_X': 3,
             'dim_Y': 1,
@@ -54,11 +52,11 @@ y_sampling = {
         },
         'exp_config': {
             'n_points_X': [100],
-            'n_points_Y': [0, 1, 2, 3, 4, 20],
-            'model_names': [['lasso', 'ncde', 'gru']],
+            'n_points_Y': [0, 1, 2, 3, 4, 9, 14, 19],
+            'model_names': [['gru', 'lasso', 'ncde']],
             'model_hyperparams': [{
                 'lasso': {
-                    'sig_order': [1, 2, 3, 4],
+                    'sig_order': [1, 2, 3, 4, 5],
                     'normalize': True,
                     'weighted': True,
                 },

@@ -92,6 +92,7 @@ class OrnsteinUhlenbeck:
 
         return sample
 
+
 class TumorGrowth:
     def __init__(self, lambda_0=0.9, lambda_1=0.7, k_1=10, k_2=0.5, psi=20):
         self.lambda_0 = lambda_0

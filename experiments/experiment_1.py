@@ -1,5 +1,7 @@
 import os
 from sacred import Experiment
+from sacred.observers import FileStorageObserver
+from sklearn.model_selection import ParameterGrid
 import sys
 import time
 
@@ -14,10 +16,39 @@ from src.models import GRUModel, NeuralCDE, SigLasso
 from src.sampling import downsample
 from src.train import train_gru, train_neural_cde
 from src.utils import l2_distance, mse_on_grid
-from src.utils_exp import load_data
-from src import utils_exp
+from src.utils_exp import load_data, simulate_and_save_data
 
-# TODO: problem with NCDE + Siglasso
+
+def gridsearch(ex, config, BASE_DIR):
+    """Loops over all the experiments in a configuration grid.
+    Parameters
+    ----------
+        ex: object
+            Instance of sacred.Experiment()
+        config_grid: dict
+            Dictionary of parameters of the experiment.
+        niter: int, default=10
+            Number of iterations of each experiment
+        dirname: str, default='my_runs'
+            Location of the directory where the experiments outputs are stored.
+    """
+    niter = config['niter']
+
+    results_path = os.path.join(BASE_DIR, f"results/{config['name']}")
+    data_path = os.path.join(BASE_DIR, f"data/{config['name']}")
+
+    os.makedirs(results_path, exist_ok=True)
+    os.makedirs(data_path, exist_ok=True)
+
+    ex.observers.append(FileStorageObserver(results_path))
+    exp_grid = list(ParameterGrid(config['exp_config']))
+    for i in range(niter):
+        simulate_and_save_data(config['data_config'], data_path)
+        for params in exp_grid:
+            params['data_path'] = data_path
+            ex.run(config_updates=params, info={})
+
+
 ex = Experiment()
 
 
@@ -135,11 +166,12 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
                     normalize=model_hyperparams['lasso']['normalize'],
                     weighted=model_hyperparams['lasso']['weighted']
                 )
-                lasso_sig.train(X_train, Y_train, grid_Y_train)
+                lasso_sig.train(X_train, Y_train, grid_Y=grid_Y_train,
+                                grid_X=grid_X_train)
 
                 Y_val_pred = lasso_sig.predict(X_val)
 
-                print(f'Lasso val output: {Y_val_pred.shape}')
+                # print(f'Lasso val output: {Y_val_pred.shape}')
                 # The best signature order is selected as the one minimizing
                 # the mse at the last time step of Y_val
                 val_mse.append(
@@ -157,7 +189,8 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
             )
 
             time_1 = time.time()
-            lasso_sig.train(X_train, Y_train, grid_Y_train)
+            lasso_sig.train(X_train, Y_train, grid_Y=grid_Y_train,
+                            grid_X=grid_X_train)
             time_2 = time.time()
 
             Y_train_pred = lasso_sig.predict(X_raw_train)
@@ -187,14 +220,13 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
     # except Exception as e:
     #     _run.log_scalar('error', str(e))
 
-    # rand_indiv = np.random.choice(Y_test.shape[0])
-    # plt.plot(Y_pred_ncde[rand_indiv, :, :].detach().numpy(), label='NCDE', c='red')
-    # plt.plot(Y_test[rand_indiv, :, :], label='True' ,c='blue')
-    # plt.plot(Y_pred_lasso[rand_indiv, :, :],label='Lasso',c='orange')
-    # plt.legend()
-    # plt.show()
 
-
-config = globals()[str(sys.argv[1])]
-
-utils_exp.gridsearch(ex, config, BASE_DIR)
+if __name__ == '__main__':
+    config = globals()[str(sys.argv[1])]
+    if config['niter'] > 1:
+        command = f"parallel -j {config['niter']} --bar python " \
+                  f"experiments/experiment_1.py {sys.argv[1]}"
+        print('Running command: {}'.format(command))
+        os.system(command)
+        exit()
+    gridsearch(ex, config, BASE_DIR)
