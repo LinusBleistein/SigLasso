@@ -223,7 +223,7 @@ def normalize_path(X):
     tv_norm = torch.linalg.norm(
         X_copy[:, 1:, :] - X_copy[:, :-1, :], axis=2).sum(axis=1)
     for i in np.arange(n_sample):
-        X_copy[i, :, :] *= 1/ (0.9 * tv_norm[i])
+        X_copy[i, :, :] *= 1 / tv_norm[i]
     return X_copy
 
 
@@ -320,7 +320,7 @@ def mse_on_grid(X_1, X_2, grid_1=None, grid_2=None):
                 pos_X_1 = np.where(grid_1[i, :] == grid_2[i, j])
                 mse_sample_i.append(
                     np.linalg.norm(
-                        np.array(X_1[:, pos_X_1, :]) - np.array(X_2[:, j, :]),
+                        np.array(X_1[i, pos_X_1, :]) - np.array(X_2[i, j, :]),
                         axis=1) ** 2)
             mse_values.append(np.mean(mse_sample_i))
         return np.mean(mse_values)

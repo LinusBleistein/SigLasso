@@ -1,8 +1,7 @@
 import json
+import multiprocessing
 import os
 import pandas as pd
-from sacred.observers import FileStorageObserver
-from sklearn.model_selection import ParameterGrid
 import torch
 
 from src.datagen import get_train_val_test
@@ -44,36 +43,6 @@ def load_data(data_path):
             Y_raw_test)
 
 #TODO: move to experiment_1 and rename: this is the main function and should not be in utils
-
-def gridsearch(ex, config, BASE_DIR):
-    """Loops over all the experiments in a configuration grid.
-    Parameters
-    ----------
-        ex: object
-            Instance of sacred.Experiment()
-        config_grid: dict
-            Dictionary of parameters of the experiment.
-        niter: int, default=10
-            Number of iterations of each experiment
-        dirname: str, default='my_runs'
-            Location of the directory where the experiments outputs are stored.
-    """
-    niter = config['niter']
-
-    results_path = os.path.join(BASE_DIR, f"results/{config['name']}")
-    data_path = os.path.join(BASE_DIR, f"data/{config['name']}")
-
-    os.makedirs(results_path, exist_ok=True)
-    os.makedirs(data_path, exist_ok=True)
-
-    ex.observers.append(FileStorageObserver(results_path))
-    exp_grid = list(ParameterGrid(config['exp_config']))
-
-    for i in range(niter):
-        simulate_and_save_data(config['data_config'], data_path)
-        for params in exp_grid:
-            params['data_path'] = data_path
-            ex.run(config_updates=params, info={})
 
 
 def load_json(path):

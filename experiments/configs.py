@@ -2,8 +2,9 @@ import numpy as np
 
 
 test = {
-        'niter': 1,
-        'name': 'test',
+        'niter': 4,
+        'n_cpu': 3, # number of cpus for parallelization
+        'name': 'test_multiprocessing',
         'data_config': {
             'model_X': 'cubic',
             'model_Y': 'cde',
@@ -39,11 +40,11 @@ test = {
 
 
 grid_n_points_Y = {
-        'niter': 1,
-        'name': 'grid_n_points_Y',
+        'niter': 10,
+        'name': 'grid_n_points_Y_lasso',
         'data_config': {
             'model_X': 'cubic',
-            'model_Y': 'lognorm',
+            'model_Y': 'cde',
             'n_train': 50,
             'n_test': 50,
             'n_val': 50,
@@ -54,11 +55,11 @@ grid_n_points_Y = {
         },
         'exp_config': {
             'n_points_X': [100],
-            'n_points_Y': [0, 1, 2, 3, 4, 20],
-            'model_names': [['lasso', 'ncde', 'gru']],
+            'n_points_Y': [0, 1, 2, 3, 4, 9, 14, 19],
+            'model_names': [['gru', 'lasso', 'ncde']],
             'model_hyperparams': [{
                 'lasso': {
-                    'sig_order': [1, 2, 3, 4],
+                    'sig_order': [1, 2, 3, 4, 5],
                     'normalize': True,
                     'weighted': True,
                 },

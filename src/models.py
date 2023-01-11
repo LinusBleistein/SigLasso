@@ -55,37 +55,37 @@ class SigLasso:
         self.normalize = normalize
 
     def train(self, X: torch.Tensor, Y: torch.Tensor,
-              grid_Y: torch.Tensor = None, pass_sigs: bool = False):
-        if pass_sigs:
-            self.reg.fit(X, Y)
+              grid_Y: torch.Tensor = None, grid_X: torch.Tensor = None):
+        assert X.ndim == 3, \
+            "X must have 3 dimensions: n_samples, time, channels"
+        assert Y.ndim == 3, \
+            "Y must have 3 dimensions: n_samples, time, channels"
+
+        sigX, Yfinal = self.get_final_matrices(
+            X, Y, grid_Y=grid_Y, grid_X=grid_X)
+
+        # In the 1d case, LassoCV raises an error when Y is 2d
+        if self.dim_Y == 1:
+            Yfinal = Yfinal.squeeze(-1)
+
+        if self.weighted:
+            self.reg.fit(
+                sigX @ get_weight_matrix(X.shape[2], self.sig_order),
+                Yfinal)
         else:
-            assert X.ndim == 3, \
-                "X must have 3 dimensions: n_samples, time, channels"
-            assert Y.ndim == 3, \
-                "Y must have 3 dimensions: n_samples, time, channels"
-
-            sigX, Yfinal = self.get_final_matrices(X, Y, grid_Y=grid_Y)
-
-            # In the 1d case, LassoCV raises an error when Y is 2d
-            if self.dim_Y == 1:
-                Yfinal = Yfinal.squeeze(-1)
-
-            if self.weighted:
-                self.reg.fit(
-                    sigX @ get_weight_matrix(X.shape[2], self.sig_order),
-                    Yfinal)
-            else:
-                self.reg.fit(sigX, Yfinal)
+            self.reg.fit(sigX, Yfinal)
 
     def get_final_matrices(
-            self, X: torch.Tensor, Y: torch.Tensor, grid_Y: torch.Tensor = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+            self, X: torch.Tensor, Y: torch.Tensor,
+            grid_Y: torch.Tensor = None,
+            grid_X: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
 
         # TODO : problem in normalization: do we do it here or for each subpath ?
 
+        if self.normalize:
+            X = normalize_path(X)
+
         if Y.shape[1] == 1:
-            if self.normalize:
-                X = normalize_path(X)
             return isig.sig(X, self.sig_order), Y[:, 0, :]
 
         if grid_Y is None:
@@ -98,6 +98,7 @@ class SigLasso:
         for i in range(Y.shape[0]):
             for j in range(grid_Y.shape[1]):
                 index_Y = grid_Y[i, j]
+                index_X = int(np.where(grid_X[i, :] == grid_Y[i, j])[0])
 
                 if index_Y == 0:
                     warnings.warn(
@@ -106,9 +107,9 @@ class SigLasso:
                         'to observation of Y')
                 else:
                     # Signature of the path up to observation time of Y
-                    sub_X_i = X[i, :index_Y, :]
-                    if self.normalize:
-                        sub_X_i = normalize_path(sub_X_i.unsqueeze(0)).squeeze(0)
+                    sub_X_i = X[i, :index_X, :]
+                    # if self.normalize:
+                    #     sub_X_i = normalize_path(sub_X_i.unsqueeze(0)).squeeze(0)
 
                     list_sigXs.append(
                         isig.sig(sub_X_i, self.sig_order))
@@ -121,6 +122,7 @@ class SigLasso:
 
     def predict(self, X: torch.Tensor, on_grid: torch.Tensor = None,
                 pass_sigs: bool = False) -> torch.Tensor:
+        #TODO: check this on_grid, probably source of errors!
         if on_grid is not None:
             assert on_grid.ndim == 2, " grid must have 2 dimensions: " \
                                       "(n_samples, time)"
@@ -137,9 +139,9 @@ class SigLasso:
 
         assert X.ndim == 3, " X must have 3 dimensions: " \
                             "n_samples, time, channels"
+
         if self.normalize:
             X = normalize_path(X)
-
         list_pred = []
         for i in range(X.shape[0]):
             pred_Y = []
@@ -150,6 +152,9 @@ class SigLasso:
                     pred_Y.append([self.reg.intercept_])
                 else:
                     sub_X_i = X[i, :index_grid, :]
+                    # if self.normalize:
+                    #     sub_X_i = normalize_path(sub_X_i.unsqueeze(0)).squeeze(
+                    #         0)
                     sigX_i = isig.sig(sub_X_i, self.sig_order).reshape(1,
                                                                        -1)
                     if self.weighted:
@@ -173,8 +178,6 @@ class SigLasso:
         assert grid_Y.ndim == 2, "grid_Y must have 2 dimensions: " \
                                  "n_samples, time"
 
-        if self.normalize:
-            X = normalize_path(X)
         new_Y = self.predict(X, on_grid=grid_Y, pass_sigs=pass_sigs)
         return l2_distance(Y_full, new_Y)
 
