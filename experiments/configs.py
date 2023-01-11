@@ -1,10 +1,7 @@
-import numpy as np
-
 
 test = {
         'niter': 4,
-        'n_cpu': 3, # number of cpus for parallelization
-        'name': 'test_multiprocessing',
+        'name': 'test',
         'data_config': {
             'model_X': 'cubic',
             'model_Y': 'cde',
@@ -39,10 +36,9 @@ test = {
         }
 
 
-
 y_sampling = {
-        'niter': 10,
-        'name': 'y_sampling_y_cde',
+        'niter': 1,
+        'name': 'y_sampling_data_cde',
         'data_config': {
             'model_X': 'cubic',
             'model_Y': 'cde',
