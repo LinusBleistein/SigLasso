@@ -2,6 +2,7 @@ import iisignature as isig
 import numpy as np
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LassoCV, MultiTaskLassoCV
+from sklearn.preprocessing import StandardScaler
 import torch
 import torchcde
 from typing import Tuple
@@ -46,7 +47,7 @@ class SigLasso:
         """
         self.sig_order = sig_order
         self.weighted = weighted
-
+        self.scaler = StandardScaler()
         self.dim_Y = dim_Y
         if self.dim_Y == 1:
             self.reg = LassoCV(max_iter=int(max_iter))

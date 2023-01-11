@@ -72,10 +72,9 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
 
 
 class OrnsteinUhlenbeck:
-    def __init__(self,theta,mu,omega):
+    def __init__(self,theta=3,mu=1):
         self.theta = theta
         self.mu = mu
-        self.omega = omega
         self.Y0 = torch.randn(1)
 
     def get_Y(self,X):
@@ -88,7 +87,7 @@ class OrnsteinUhlenbeck:
             y = self.Y0.clone()
             sample[i,0] = y
             for j,t in enumerate(time_grid[:-1]):
-                y += self.theta*(self.mu-y)*dt + self.omega@(X[i,j+1,1:]-X[i,j,1:])
+                y += self.theta*(self.mu-y)*dt + torch.ones(X.shape[2]-1)@(X[i,j+1,1:]-X[i,j,1:])
                 sample[i,j+1] = y
 
         return sample
@@ -202,10 +201,16 @@ def get_train_val_test(
         Y_val = gen_cde.get_Y(X_val, time_true)
 
     if model_Y == 'tumor_growth':
-        gen_tumor = TumorGrowth()
+        gen_ougen_tumor = TumorGrowth()
         Y_train = gen_tumor.get_Y(X_train)
         Y_test = gen_tumor.get_Y(X_test)
         Y_val = gen_tumor.get_Y(X_val)
+
+    if model_Y == 'ornstein_uhlenbeck':
+        gen_ou = OrnsteinUhlenbeck()
+        Y_train = gen_ou.get_Y(X_train)
+        Y_test = gen_ou.get_Y(X_test)
+        Y_val = gen_ou.get_Y(X_val)
 
     elif model_Y == 'lognorm':
         Y_train = torch.log(
