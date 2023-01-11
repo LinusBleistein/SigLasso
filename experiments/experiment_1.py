@@ -1,9 +1,11 @@
+import numpy as np
 import os
 from sacred import Experiment
 from sacred.observers import FileStorageObserver
 from sklearn.model_selection import ParameterGrid
 import sys
 import time
+import uuid
 
 # Set working directory to source
 abspath = os.path.abspath(__file__)
@@ -35,14 +37,18 @@ def gridsearch(ex, config, BASE_DIR):
     niter = config['niter']
 
     results_path = os.path.join(BASE_DIR, f"results/{config['name']}")
-    data_path = os.path.join(BASE_DIR, f"data/{config['name']}")
 
     os.makedirs(results_path, exist_ok=True)
-    os.makedirs(data_path, exist_ok=True)
 
     ex.observers.append(FileStorageObserver(results_path))
+
     exp_grid = list(ParameterGrid(config['exp_config']))
     for i in range(niter):
+        # Generate random name for data path
+        exp_name = f"{config['name']}_{str(uuid.uuid4())}"
+        data_path = os.path.join(BASE_DIR, f"data/{exp_name}")
+        os.makedirs(data_path, exist_ok=True)
+
         simulate_and_save_data(config['data_config'], data_path)
         for params in exp_grid:
             params['data_path'] = data_path
@@ -50,7 +56,6 @@ def gridsearch(ex, config, BASE_DIR):
 
 
 ex = Experiment()
-
 
 @ex.main
 def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
@@ -223,10 +228,4 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
 
 if __name__ == '__main__':
     config = globals()[str(sys.argv[1])]
-    if config['niter'] > 1:
-        command = f"parallel -j {config['niter']} --bar python " \
-                  f"experiments/experiment_1.py {sys.argv[1]}"
-        print('Running command: {}'.format(command))
-        os.system(command)
-        exit()
     gridsearch(ex, config, BASE_DIR)
