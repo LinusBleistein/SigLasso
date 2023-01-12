@@ -7,6 +7,8 @@ import sys
 import time
 import uuid
 
+# TODO - Improvements: speed up SigLasso.predict and data generation
+
 # Set working directory to source
 abspath = os.path.abspath(__file__)
 BASE_DIR = os.path.dirname(os.path.dirname(abspath))
