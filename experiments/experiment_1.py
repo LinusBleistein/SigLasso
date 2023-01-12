@@ -54,10 +54,11 @@ def gridsearch(ex, config, BASE_DIR):
         simulate_and_save_data(config['data_config'], data_path)
         for params in exp_grid:
             params['data_path'] = data_path
-            ex.run(config_updates=params, info={})
+            ex.run(config_updates=params, info=config['data_config'])
 
 
 ex = Experiment()
+
 
 @ex.main
 def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
