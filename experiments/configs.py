@@ -4,11 +4,11 @@
 
 
 test = {
-        'niter': 4,
-        'name': 'test',
+        'niter': 1,
+        'name': 'test_3',
         'data_config': {
-            'model_X': 'cubic',
-            'model_Y': 'cde',
+            'model_X': 'brownian',
+            'model_Y': 'ornstein_uhlenbeck',
             'n_train': 10,
             'n_test': 10,
             'n_val': 10,
@@ -120,7 +120,7 @@ y_sampling_ou_50 = {
             'model_X': 'brownian',
             'model_Y': 'ornstein_uhlenbeck',
             'n_train': 50,
-            'n_test': 50,
+            'n_test': 100,
             'n_val': 50,
             'n_points_true': 1000,
             'dim_X': 2,
@@ -157,7 +157,7 @@ y_sampling_ou_1000 = {
             'model_X': 'brownian',
             'model_Y': 'ornstein_uhlenbeck',
             'n_train': 1000,
-            'n_test': 1000,
+            'n_test': 100,
             'n_val': 1000,
             'n_points_true': 1000,
             'dim_X': 2,
