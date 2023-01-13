@@ -74,3 +74,23 @@ class OriginalVectorField(torch.nn.Module):
         z = self.linear2(z)
         z = z.view(z.size(0), self.hidden_channels, self.input_channels)
         return z
+
+class AlmostOriginalVectorField(torch.nn.Module):
+    """
+    Original vector field from "Neural Controlled Differential Equations for
+    Irregular Time Series" (Kidger, 2020) but with a different activation function (Tanh instead of Relu).
+    """
+    def __init__(self, hidden_channels, input_channels):
+        super(AlmostOriginalVectorField, self).__init__()
+        self.input_channels = input_channels
+        self.hidden_channels = hidden_channels
+
+        self.linear1 = torch.nn.Linear(hidden_channels, 128)
+        self.linear2 = torch.nn.Linear(128, input_channels * hidden_channels)
+
+    def forward(self, t, z):
+        z = self.linear1(z)
+        z = z.tanh()
+        z = self.linear2(z)
+        z = z.view(z.size(0), self.hidden_channels, self.input_channels)
+        return z

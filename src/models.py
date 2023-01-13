@@ -10,7 +10,7 @@ import warnings
 
 from src.utils import l2_distance, normalize_path, get_weight_matrix
 from src.vector_fields import SimpleVectorField, MultiLayerVectorField, \
-    OriginalVectorField
+    OriginalVectorField, AlmostOriginalVectorField
 
 # Remove some warnings
 warnings.simplefilter('once', UserWarning)
@@ -254,6 +254,10 @@ class NeuralCDE(torch.nn.Module):
                 activation=activation)
         elif vector_field == 'original':
             self.func = OriginalVectorField(hidden_channels, input_channels)
+
+        elif vector_field == 'almost_original':
+            self.func = AlmostOriginalVectorField(hidden_channels, input_channels)
+
         else:
             raise ValueError(
                 "vector_field must be one of ['simple, 'multilayer']")
