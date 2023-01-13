@@ -72,6 +72,15 @@ def extract_metrics(loc):
     return metrics
 
 
+def extract_info(loc):
+    """ Extracts the metrics from the directory. """
+    infos = load_json(loc + '/info.json')
+    # Strip of non-necessary entries
+    # infos = {key: value['values'] for key, value in infos.items()}
+
+    return infos
+
+
 def get_ex_results(dirname):
     """Extract all result of a configuration grid.
     Parameters
@@ -91,21 +100,27 @@ def get_ex_results(dirname):
     frames = []
     for run_num in run_nums:
         loc = dirname + '/' + run_num
+
+        df_list = []
         try:
             config = extract_config(loc)
+            df_list.append(pd.DataFrame.from_dict(config, orient='index').T)
+
         except Exception as e:
             print('Could not load config at: {}. Failed with error:\n\t"{}"'.format(loc, e))
         try:
             metrics = extract_metrics(loc)
+            df_list.append(pd.DataFrame.from_dict(metrics, orient='index').T)
         except Exception as e:
             print('Could not load metrics at: {}. Failed with error:\n\t"{}"'.format(loc, e))
 
-        # Create a config and metrics frame and concat them
-        config = {str(k): str(v) for k, v in config.items()}    # Some dicts break for some reason
-        df_config = pd.DataFrame.from_dict(config, orient='index').T
-        df_metrics = pd.DataFrame.from_dict(metrics, orient='index').T
+        try:
+            infos = extract_info(loc)
+            df_list.append(pd.DataFrame.from_dict(infos, orient='index').T)
+        except Exception as e:
+            print('Could not load infos at: {}. Failed with error:\n\t"{}"'.format(loc, e))
 
-        df = pd.concat([df_config, df_metrics], axis=1)
+        df = pd.concat(df_list, axis=1)
         df.index = [int(run_num)]
         frames.append(df)
 

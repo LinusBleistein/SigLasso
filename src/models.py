@@ -81,8 +81,6 @@ class SigLasso:
             grid_Y: torch.Tensor = None,
             grid_X: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        # TODO : problem in normalization: do we do it here or for each subpath ?
-
         if self.normalize:
             X = normalize_path(X)
 

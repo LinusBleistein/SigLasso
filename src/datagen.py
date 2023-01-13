@@ -29,16 +29,16 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
         return X
 
     if model_X == 'brownian':
-        t = torch.linspace(0,1,n_points)
-        bm = BrownianMotion(t=10,scale=0.1)
-        sample = torch.empty((n_samples,n_points,dim_X))
+        t = torch.linspace(0, 1, n_points)
+        bm = BrownianMotion(t=10, scale=0.1)
+        sample = torch.empty((n_samples, n_points, dim_X))
         for i in np.arange(n_samples):
-            brownian_sample = torch.tensor([bm.sample_at(t) for i in np.arange(dim_X-1)]).T
-            sample[i,:,1:] = brownian_sample
-            sample[i,:,0] = t
+            brownian_sample = torch.tensor(
+                [bm.sample_at(t) for i in np.arange(dim_X-1)]).T
+            sample[i, :, 1:] = brownian_sample
+            sample[i, :, 0] = t
 
         return sample
-
 
     if model_X == 'squared_brownian':
         t = torch.linspace(0, 10, n_points)
@@ -85,8 +85,8 @@ class OrnsteinUhlenbeck:
 
         for i in np.arange(X.shape[0]):
             y = self.Y0.clone()
-            sample[i,0] = y
-            for j,t in enumerate(time_grid[:-1]):
+            sample[i, 0] = y
+            for j, t in enumerate(time_grid[:-1]):
                 y += self.theta*(self.mu-y)*dt + torch.ones(X.shape[2]-1)@(X[i,j+1,1:]-X[i,j,1:])
                 sample[i,j+1] = y
 
@@ -201,13 +201,13 @@ def get_train_val_test(
         Y_test = gen_cde.get_Y(X_test, time_true)
         Y_val = gen_cde.get_Y(X_val, time_true)
 
-    if model_Y == 'tumor_growth':
-        gen_ougen_tumor = TumorGrowth()
+    elif model_Y == 'tumor_growth':
+        gen_tumor = TumorGrowth()
         Y_train = gen_tumor.get_Y(X_train)
         Y_test = gen_tumor.get_Y(X_test)
         Y_val = gen_tumor.get_Y(X_val)
 
-    if model_Y == 'ornstein_uhlenbeck':
+    elif model_Y == 'ornstein_uhlenbeck':
         gen_ou = OrnsteinUhlenbeck()
         Y_train = gen_ou.get_Y(X_train)
         Y_test = gen_ou.get_Y(X_test)
