@@ -28,6 +28,20 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
         X = Xfunc.evaluate(torch.linspace(0, 1, n_points))
         return X
 
+    if model_X == 'cubic_positive':
+        # Fit polynomial to knots
+        t = torch.linspace(0, 1, n_knots)
+        t_ = t.unsqueeze(0).unsqueeze(-1).expand(
+            n_samples, n_knots, 1)
+        knots_ = torch.randn(n_samples, n_knots, dim_X - 1)
+        knots = torch.cat([t_, knots_], dim=2)
+        coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(
+            knots, t=t)
+
+        Xfunc = torchcde.CubicSpline(coeffs, t=t)
+        X = Xfunc.evaluate(torch.linspace(0, 1, n_points)) ** 2 / 5
+        return X
+
     if model_X == 'brownian':
         t = torch.linspace(0, 1, n_points)
         bm = BrownianMotion(t=10, scale=0.1)
