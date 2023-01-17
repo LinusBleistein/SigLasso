@@ -5,7 +5,7 @@
 
 test = {
         'niter': 1,
-        'name': 'test_3',
+        'name': 'test',
         'data_config': {
             'model_X': 'brownian',
             'model_Y': 'ornstein_uhlenbeck',
@@ -78,7 +78,7 @@ y_sampling = {
 
 y_sampling_ou_100 = {
         'niter': 1,
-        'name': 'y_sampling_ou',
+        'name': 'y_sampling_ou_2',
         'data_config': {
             'model_X': 'brownian',
             'model_Y': 'ornstein_uhlenbeck',
@@ -115,7 +115,7 @@ y_sampling_ou_100 = {
 
 y_sampling_ou_50 = {
         'niter': 1,
-        'name': 'y_sampling_ou',
+        'name': 'y_sampling_ou_2',
         'data_config': {
             'model_X': 'brownian',
             'model_Y': 'ornstein_uhlenbeck',
@@ -152,7 +152,7 @@ y_sampling_ou_50 = {
 
 y_sampling_ou_1000 = {
         'niter': 1,
-        'name': 'y_sampling_ou',
+        'name': 'y_sampling_ou_2',
         'data_config': {
             'model_X': 'brownian',
             'model_Y': 'ornstein_uhlenbeck',
