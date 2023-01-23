@@ -269,10 +269,14 @@ class NeuralCDE(torch.nn.Module):
         Xfunc = torchcde.CubicSpline(coeffs)
         X0 = Xfunc.evaluate(Xfunc.interval[0])
         z0 = self.initial(X0)
+
+        step_size = (Xfunc.grid_points[1:] - Xfunc.grid_points[:-1]).min()
         z_T = torchcde.cdeint(X=Xfunc,
                               z0=z0,
                               func=self.func,
-                              t=Xfunc.interval)
+                              t=Xfunc.interval,
+                              method='rk4',
+                              options=dict(step_size=step_size))
         z_T = z_T[:, 1]
         return z_T
 
@@ -286,7 +290,13 @@ class NeuralCDE(torch.nn.Module):
         X0 = Xfunc.evaluate(Xfunc.interval[0])
         z0 = self.initial(X0)
 
-        Y = torchcde.cdeint(X=Xfunc, z0=z0, func=self.func, t=time_Y)
+        step_size = (Xfunc.grid_points[1:] - Xfunc.grid_points[:-1]).min()
+        Y = torchcde.cdeint(X=Xfunc,
+                              z0=z0,
+                              func=self.func,
+                              t=time_Y,
+                              method='rk4',
+                              options=dict(step_size=step_size))
 
         return Y.detach().numpy()
 

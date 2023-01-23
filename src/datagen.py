@@ -91,7 +91,7 @@ class OrnsteinUhlenbeck:
         self.mu = mu
         self.Y0 = torch.randn(1)
 
-    def get_Y(self,X):
+    def get_Y(self, X):
 
         sample = torch.empty((X.shape[0],X.shape[1],1))
         time_grid = X[0,:,0]
