@@ -15,7 +15,7 @@ Then you need to install our code as a package
 
 ## Running an experiment
 
-This code is based on the sacred framework.  To run an experiment, you need to 
+This code is based on the [sacred](https://sacred.readthedocs.io/en/stable/quickstart.html) framework.  To run an experiment, you need to 
 specify a configuration in `experiments/configs.py` and then run 
 
 ``python experiments/simulation_main.py name_config``
