@@ -7,7 +7,6 @@ import sys
 import time
 import uuid
 
-# TODO - Improvements: speed up SigLasso.predict and data generation
 
 # Set working directory to source
 abspath = os.path.abspath(__file__)
@@ -63,9 +62,6 @@ ex = Experiment()
 @ex.main
 def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
             model_hyperparams):
-    # Add the try/except conditions this if you launch many runs so that
-    # everything does not stop if there is an error
-    # try:
     X_raw_train, Y_raw_train, X_raw_val, Y_raw_val, X_raw_test, Y_raw_test = \
         load_data(data_path)
 
@@ -166,6 +162,8 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
 
         elif model == 'lasso':
             val_mse = []
+
+            # Signature order selection validation loop
             for sig_order in model_hyperparams['lasso']['sig_order']:
                 print(f'Train lasso for signature order {sig_order}')
                 lasso_sig = SigLasso(
@@ -179,9 +177,6 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
 
                 Y_val_pred = lasso_sig.predict(X_val)
 
-                # print(f'Lasso val output: {Y_val_pred.shape}')
-                # The best signature order is selected as the one minimizing
-                # the mse at the last time step of Y_val
                 val_mse.append(
                     mse_on_grid(Y_val_pred, Y_val,
                                 grid_1=grid_X_val, grid_2=grid_Y_val))
@@ -204,8 +199,6 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
             Y_train_pred = lasso_sig.predict(X_raw_train)
             Y_test_pred = lasso_sig.predict(X_raw_test)
 
-            # print(f'SigLasso: Y_train_pred.shape={Y_train_pred.shape}')
-
             _run.log_scalar(f'val_mse_array_{model}', val_mse)
             _run.log_scalar(
                 f'l2_train_{model}',
@@ -224,9 +217,6 @@ def run_exp(_run, data_path, n_points_X, n_points_Y, model_names,
 
         else:
             raise ValueError('model does not exist')
-
-    # except Exception as e:
-    #     _run.log_scalar('error', str(e))
 
 
 if __name__ == '__main__':

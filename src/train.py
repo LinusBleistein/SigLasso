@@ -1,16 +1,12 @@
 import torch
 
-from src.models import GRUModel
+from src.models import GRUModel, NeuralCDE
 from src.utils import split_and_fill_XY_on_grid
 
-def train_gru(
-        model: GRUModel,
-        X_raw: list,
-        Y_raw: torch.Tensor,
-        num_epochs: int,
-        lr: float = 0.001,
-        batch_size: int = 32,
-        grid_Y: torch.Tensor = None):
+
+def train_gru(model: GRUModel, X_raw: list, Y_raw: torch.Tensor,
+              num_epochs: int, lr: float = 0.001, batch_size: int = 32,
+              grid_Y: torch.Tensor = None) -> GRUModel:
 
     # Split the paths in case Y is observed at several time points and forward
     # fill if irregular sampling of X
@@ -36,8 +32,10 @@ def train_gru(
     return model
 
 
-def train_neural_cde(model, X_raw, Y_raw, num_epochs, lr=0.001, batch_size=32,
-                     grid_Y=None):
+def train_neural_cde(model: NeuralCDE, X_raw: torch.Tensor,
+                     Y_raw: torch.Tensor, num_epochs: int, lr: float = 0.001,
+                     batch_size: int = 32, grid_Y: torch.Tensor = None) \
+        -> NeuralCDE:
 
     # Split the paths in case Y is observed at several time points
     X, Y = split_and_fill_XY_on_grid(X_raw, Y_raw, grid_Y=grid_Y)

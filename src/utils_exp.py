@@ -2,11 +2,13 @@ import json
 import os
 import pandas as pd
 import torch
-
+from typing import Tuple
 from src.datagen import get_train_val_test
 
 
-def simulate_and_save_data(data_config, data_path):
+def simulate_and_save_data(data_config: dict, data_path: str) -> str:
+    # Simulate finely sampled data and save it to use the same raw data when
+    # downsampling
     X_raw_train, Y_raw_train, X_raw_val, Y_raw_val, X_raw_test, Y_raw_test = \
         get_train_val_test(
             data_config['model_X'],
@@ -30,7 +32,9 @@ def simulate_and_save_data(data_config, data_path):
     return data_path
 
 
-def load_data(data_path):
+def load_data(data_path: str) \
+        -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
+                 torch.Tensor, torch.Tensor]:
     X_raw_train = torch.load(f"{data_path}/X_raw_train.pt")
     Y_raw_train = torch.load(f"{data_path}/Y_raw_train.pt")
     X_raw_val = torch.load(f"{data_path}/X_raw_val.pt")
@@ -41,56 +45,36 @@ def load_data(data_path):
     return (X_raw_train, Y_raw_train, X_raw_val, Y_raw_val, X_raw_test, 
             Y_raw_test)
 
-#TODO: move to experiment_1 and rename: this is the main function and should not be in utils
 
-
-def load_json(path):
-    """Loads a json object
-    Parameters
-    ----------
-    path: str
-        Location of the json file.
-    """
+def load_json(path: str) -> dict:
+    """Loads a json object """
     with open(path) as file:
         return json.load(file)
 
 
-def extract_config(loc):
+def extract_config(loc: str)-> dict:
     """ Extracts the metrics from the directory."""
     config = load_json(loc + '/config.json')
     return config
 
 
-def extract_metrics(loc):
+def extract_metrics(loc: str) -> dict:
     """ Extracts the metrics from the directory. """
     metrics = load_json(loc + '/metrics.json')
 
     # Strip of non-necessary entries
     metrics = {key: value['values'] for key, value in metrics.items()}
-
     return metrics
 
 
-def extract_info(loc):
+def extract_info(loc: str) -> dict:
     """ Extracts the metrics from the directory. """
     infos = load_json(loc + '/info.json')
-    # Strip of non-necessary entries
-    # infos = {key: value['values'] for key, value in infos.items()}
-
     return infos
 
 
-def get_ex_results(dirname):
-    """Extract all result of a configuration grid.
-    Parameters
-    ----------
-    dirname: str
-        Name of the directory where the experiments are stored.
-    Returns
-    -------
-    df: pandas DataFrame
-        Dataframe with all the experiments results
-    """
+def get_ex_results(dirname: str) -> pd.DataFrame:
+    """Extract all result of an experiment"""
     not_in = ['_sources', '.DS_Store']
     # dir_path = os.path.dirname(os.path.realpath(__file__))
     # dirname = dir_path + '/' + dirname
@@ -106,18 +90,21 @@ def get_ex_results(dirname):
             df_list.append(pd.DataFrame.from_dict(config, orient='index').T)
 
         except Exception as e:
-            print('Could not load config at: {}. Failed with error:\n\t"{}"'.format(loc, e))
+            print('Could not load config at: {}. '
+                  'Failed with error:\n\t"{}"'.format(loc, e))
         try:
             metrics = extract_metrics(loc)
             df_list.append(pd.DataFrame.from_dict(metrics, orient='index').T)
         except Exception as e:
-            print('Could not load metrics at: {}. Failed with error:\n\t"{}"'.format(loc, e))
+            print('Could not load metrics at: {}. '
+                  'Failed with error:\n\t"{}"'.format(loc, e))
 
         try:
             infos = extract_info(loc)
             df_list.append(pd.DataFrame.from_dict(infos, orient='index').T)
         except Exception as e:
-            print('Could not load infos at: {}. Failed with error:\n\t"{}"'.format(loc, e))
+            print('Could not load infos at: {}. '
+                  'Failed with error:\n\t"{}"'.format(loc, e))
 
         df = pd.concat(df_list, axis=1)
         df.index = [int(run_num)]

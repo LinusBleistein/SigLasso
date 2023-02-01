@@ -41,11 +41,13 @@ model_hyperparams = {
 X_train = data_tensor_train[2][:,:,:]
 Y_train = label_tensor_train[2][:]
 
+
 def mse_simple(X, Y):
     """
     X and Y must be of shape (n_samples, dim)
     """
     return np.mean(np.linalg.norm(np.array(X) - np.array(Y), axis=1) ** 2)
+
 
 for horizon in list(horizons):
     X_train = data_tensor_train[horizon - 1][:, :, :]

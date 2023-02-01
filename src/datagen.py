@@ -9,10 +9,9 @@ from src.vector_fields import SimpleVectorField
 
 
 def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
-             n_knots: int = 15):
-    """ Simulation of trajectories for predictor. The 1st coordinate of X is
-    always time
-
+             n_knots: int = 15) -> torch.Tensor:
+    """ Simulation of feature time series. Note that the 1st dimension of X is
+    always time.
     """
     if model_X == 'cubic':
         # Fit polynomial to knots
@@ -28,7 +27,7 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
         X = Xfunc.evaluate(torch.linspace(0, 1, n_points))
         return X
 
-    if model_X == 'cubic_positive':
+    elif model_X == 'cubic_positive':
         # Fit polynomial to knots
         t = torch.linspace(0, 1, n_knots)
         t_ = t.unsqueeze(0).unsqueeze(-1).expand(
@@ -42,7 +41,7 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
         X = Xfunc.evaluate(torch.linspace(0, 1, n_points)) ** 2 / 5
         return X
 
-    if model_X == 'brownian':
+    elif model_X == 'brownian':
         t = torch.linspace(0, 1, n_points)
         bm = BrownianMotion(t=10, scale=0.1)
         sample = torch.empty((n_samples, n_points, dim_X))
@@ -54,7 +53,7 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
 
         return sample
 
-    if model_X == 'squared_brownian':
+    elif model_X == 'squared_brownian':
         t = torch.linspace(0, 10, n_points)
         bm = BrownianMotion(t=10)
         x_ = torch.zeros((n_samples, n_points, 2))
@@ -65,7 +64,7 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
 
         return x_
 
-    elif model_X == 'cubic_diffusion':
+    elif model_X == 'diffusion':
         t = torch.linspace(0, 1, n_points)
         t_ = t.unsqueeze(0).unsqueeze(-1).expand(
             n_samples, n_points, 1)
@@ -81,41 +80,51 @@ def create_X(model_X: str, n_samples: int, n_points: int, dim_X: int = None,
 
     else:
         raise NotImplementedError(
-            f"{model_X} not implemented. Accepted values for model_X are "
-            f"'cubic_diffusion', 'squared_brownian', 'brownian' and 'cubic' ")
+            f"{model_X} not implemented. Accepted values: 'brownian', 'cubic',"
+            f" 'diffusion', 'cubic_positive', 'squared_brownian'.")
 
 
 class OrnsteinUhlenbeck:
-    def __init__(self,theta=3,mu=1):
+    """ Generate an Ornstein Uhlenbeck process.
+    """
+    def __init__(self, theta: int = 3, mu: int = 1):
         self.theta = theta
         self.mu = mu
         self.Y0 = torch.randn(1)
 
-    def get_Y(self, X):
-
-        sample = torch.empty((X.shape[0],X.shape[1],1))
-        time_grid = X[0,:,0]
+    def get_Y(self, X: torch.Tensor) -> torch.Tensor:
+        assert X.ndim == 3, "X must have 3 dimensions: " \
+                            "(n_samples, n_points, dim_X)"
+        sample = torch.empty((X.shape[0], X.shape[1], 1))
+        time_grid = X[0, :, 0]
         dt = time_grid[1]-time_grid[0]
 
         for i in np.arange(X.shape[0]):
             y = self.Y0.clone()
             sample[i, 0] = y
             for j, t in enumerate(time_grid[:-1]):
-                y += self.theta*(self.mu-y)*dt + torch.ones(X.shape[2]-1)@(X[i,j+1,1:]-X[i,j,1:])
-                sample[i,j+1] = y
+                y += (self.theta * (self.mu - y) * dt) + (
+                        torch.ones(X.shape[2] - 1) @ (
+                        X[i, j+1, 1:] - X[i, j, 1:])
+                )
+                sample[i, j+1] = y
 
         return sample
 
 
 class TumorGrowth:
-    def __init__(self, lambda_0=0.9, lambda_1=0.7, k_1=10, k_2=0.5, psi=20):
+    """Class implementing a system of equations representing tumor growth
+    dynamics.
+    """
+    def __init__(self, lambda_0: float = 0.9, lambda_1: float = 0.7,
+                 k_1: float = 10., k_2: float = 0.5, psi: int = 20):
         self.lambda_0 = lambda_0
         self.lambda_1 = lambda_1
         self.k_1 = k_1
         self.k_2 = k_2
         self.psi = psi
 
-    def tumor_growth(self, u, y, x):
+    def tumor_growth(self, u: torch.Tensor, y: float, x: float) -> np.ndarray:
         assert u.ndim == 1, "u must be a one dimensional array of length 4"
         assert u.shape[0] == 4, "u must be a one dimensional array of length 4"
 
@@ -130,8 +139,8 @@ class TumorGrowth:
         du_4 = self.k_1 * (u[2] - u[3])
         return np.array([du_1, du_2, du_3, du_4])
 
-    def tumor_trajectory(self, x):
-        assert x.ndim == 1, "x must be a one-dimensional array"
+    def tumor_trajectory(self, x: torch.Tensor) -> torch.Tensor:
+        assert x.ndim == 1, "x must be a one-dimensional tensor"
         y_track = []
         u = np.array([2, 0, 0, 0])
         y = 2.
@@ -145,8 +154,9 @@ class TumorGrowth:
 
         return torch.tensor(y_track)
 
-    def get_Y(self, X):
-        assert X.ndim == 3, " X must have 3 dimensions: n_samples, time, channels"
+    def get_Y(self, X: torch.Tensor) -> torch.tensor:
+        assert X.ndim == 3, "X must have 3 dimensions: " \
+                            "(n_samples, n_points, dim_X)"
         assert X.shape[2] == 2, "To generate tumor trajectories, X must be " \
                                 "1-dimensional, hence we must have " \
                                 "X.shape[2] == 2 (time being included in X)"
@@ -159,7 +169,8 @@ class TumorGrowth:
 
 class CDEModel():
     """
-    CDE model with vector field one layer neural network initialized randomly.
+    CDE model with for vector field a one layer neural network initialized
+    randomly.
     """
     def __init__(self, dim_X: int, dim_Y: int, non_linearity: str = None):
         self.dim_X = dim_X
@@ -171,10 +182,6 @@ class CDEModel():
     def get_Y(self, X: torch.Tensor, time: torch.Tensor,
               interpolation_method: str = 'cubic', with_noise: bool = False,
               noise_Y_var: float = 0.01):
-        """
-        Samples Y from X
-
-        """
         # Path interpolation to obtain smooth paths
         Xfunc = matrix_to_function(X, time, interpolation_method)
 
@@ -193,7 +200,7 @@ class CDEModel():
 def get_train_val_test(
         model_X: str, model_Y: str, n_train: int, n_val: int, n_test: int,
         n_points_true: int, dim_X: int = None, dim_Y: int = None,
-        non_linearity_Y: str = None, window_Y: int = 3):
+        non_linearity_Y: str = None, window_Y: int = 10):
 
     time_true = torch.linspace(0, 1, n_points_true)
 

@@ -1,3 +1,4 @@
+import iisignature
 import iisignature as isig
 import numpy as np
 from sklearn.exceptions import ConvergenceWarning
@@ -9,41 +10,18 @@ from typing import Tuple
 import warnings
 
 from src.utils import l2_distance, normalize_path, get_weight_matrix
-from src.vector_fields import SimpleVectorField, MultiLayerVectorField, \
-    OriginalVectorField, AlmostOriginalVectorField
+from src.vector_fields import OriginalVectorField, AlmostOriginalVectorField
 
 # Remove some warnings
 warnings.simplefilter('once', UserWarning)
 warnings.simplefilter("ignore", category=ConvergenceWarning)
 
 
-# TODO: vérifier si la signature sort un 1 au début et si on n'a pas 2 intercepts
-
-# TODO: un propos quelque part sur quoi faire si le nombre de sampling
-#  points des X sont différents d'un individu à l'autre: faire du
-#  remplissage feed-forward car ça ne perturbe pas la signature ?
-
-# TODO: check everywhere if we need numpy or tensor arrays!
-
-# TODO: résoudre la question de Y au temps 0
-
-#TODO: check shape of signature not too large, otherwise pass
-
-
 class SigLasso:
     def __init__(self, sig_order: int, dim_Y, max_iter=1e3,
                  normalize: bool = True, weighted: bool = False):
-        """
-        Parameters
-        ----------
-        sig_order: depth of the signature to compute.
-        alpha_grid: hyperparameter validation grid for the Lasso.
-        max_iter: maximum iterations for solving the penalized regression.
-        pass_sigs: if True, SigLasso can be trained directly with signatures instead of paths.
-        n_points: if pass_sigs is True, this is the number of sampling points of X.
-        normalize: if True, paths are normalized by their total variation before signature computation.
-        weighted: if True, layers of the signature vectors are normalized to enforce layer-wise specific
-        penalization.
+        """Implements our SigLasso algorithm: a linear regression on signature
+        features with a specific L1 regularization.
         """
         self.sig_order = sig_order
         self.weighted = weighted
@@ -58,9 +36,9 @@ class SigLasso:
     def train(self, X: torch.Tensor, Y: torch.Tensor,
               grid_Y: torch.Tensor = None, grid_X: torch.Tensor = None):
         assert X.ndim == 3, \
-            "X must have 3 dimensions: n_samples, time, channels"
+            "X must have 3 dimensions: (n_samples, n_points, dim_X)"
         assert Y.ndim == 3, \
-            "Y must have 3 dimensions: n_samples, time, channels"
+            "Y must have 3 dimensions: (n_samples, n_points, dim_X)"
 
         sigX, Yfinal = self.get_final_matrices(
             X, Y, grid_Y=grid_Y, grid_X=grid_X)
@@ -80,6 +58,11 @@ class SigLasso:
             self, X: torch.Tensor, Y: torch.Tensor,
             grid_Y: torch.Tensor = None,
             grid_X: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
+
+        # Check that the order of signature is not too large
+        if iisignature.siglength(X.shape[2], self.sig_order) > 10 ** 6:
+            raise ValueError("Length of signatures are larger than 10**6, "
+                             "pick a smaller truncation order.")
 
         if self.normalize:
             X = normalize_path(X)
@@ -107,8 +90,6 @@ class SigLasso:
                 else:
                     # Signature of the path up to observation time of Y
                     sub_X_i = X[i, :index_X, :]
-                    # if self.normalize:
-                    #     sub_X_i = normalize_path(sub_X_i.unsqueeze(0)).squeeze(0)
 
                     list_sigXs.append(
                         isig.sig(sub_X_i, self.sig_order))
@@ -121,10 +102,9 @@ class SigLasso:
 
     def predict(self, X: torch.Tensor, on_grid: torch.Tensor = None,
                 pass_sigs: bool = False) -> torch.Tensor:
-        #TODO: check this on_grid, probably source of errors!
         if on_grid is not None:
             assert on_grid.ndim == 2, " grid must have 2 dimensions: " \
-                                      "(n_samples, time)"
+                                      "(n_samples, n_points)"
             on_grid = on_grid.numpy().astype(int)
         else:
             # If on_grid has not been passed as argument, we predict Y at
@@ -137,7 +117,7 @@ class SigLasso:
         # new_Y = np.zeros((X.shape[0], on_grid.shape[1], self.dim_Y))
 
         assert X.ndim == 3, " X must have 3 dimensions: " \
-                            "n_samples, time, channels"
+                            "(n_samples, n_points, dim_X)"
 
         if self.normalize:
             X = normalize_path(X)
@@ -151,9 +131,6 @@ class SigLasso:
                     pred_Y.append([self.reg.intercept_])
                 else:
                     sub_X_i = X[i, :index_grid, :]
-                    # if self.normalize:
-                    #     sub_X_i = normalize_path(sub_X_i.unsqueeze(0)).squeeze(
-                    #         0)
                     sigX_i = isig.sig(sub_X_i, self.sig_order).reshape(1,
                                                                        -1)
                     if self.weighted:
@@ -171,11 +148,11 @@ class SigLasso:
     def get_l2_error(self, X: torch.Tensor, Y_full: torch.Tensor,
                      grid_Y: torch.Tensor, pass_sigs=False) -> float:
         assert X.ndim == 3, " X must have 3 dimensions: " \
-                            "n_samples, time, channels"
+                            "(n_samples, n_points, dim_X)"
         assert Y_full.ndim == 3, "Y must have 3 dimensions: " \
-                                 "n_samples, time, channels"
+                                 "(n_samples, n_points, dim_Y)"
         assert grid_Y.ndim == 2, "grid_Y must have 2 dimensions: " \
-                                 "n_samples, time"
+                                 "(n_samples, n_points)"
 
         new_Y = self.predict(X, on_grid=grid_Y, pass_sigs=pass_sigs)
         return l2_distance(Y_full, new_Y)
@@ -198,9 +175,9 @@ class GRUModel(torch.nn.Module):
         # Fully connected layer
         self.fc = torch.nn.Linear(hidden_channels, output_dim)
 
-    def forward(self, X: torch.Tensor):
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
         assert X.ndim == 3, " X must have 3 dimensions: " \
-                            "n_samples, time, channels"
+                            "(n_samples, n_points, dim_X)"
         # Initializing hidden state for first input with zeros
         h0 = torch.zeros(
             self.layer_dim, X.size(0), self.hidden_channels).requires_grad_()
@@ -222,7 +199,7 @@ class GRUModel(torch.nn.Module):
 
     def predict_trajectory(self, X: torch.Tensor) -> torch.Tensor:
         assert X.ndim == 3, " X must have 3 dimensions: " \
-                            "n_samples, time, channels"
+                            "(n_samples, n_points, dim_X)"
 
         h0 = torch.zeros(self.layer_dim, X.size(0),
                          self.hidden_channels).requires_grad_()
@@ -233,37 +210,28 @@ class GRUModel(torch.nn.Module):
         Y = torch.stack(out, dim=1)
         return Y.detach()  # Need to detach to later compute l2 distance
 
-    def get_l2_error(self, X, Y):
+    def get_l2_error(self, X: torch.Tensor, Y:torch.Tensor) -> float:
         Y_pred = self.predict_trajectory(X)
         return l2_distance(Y, Y_pred)
 
 
 class NeuralCDE(torch.nn.Module):
-    def __init__(self, input_channels, hidden_channels, interpolation="cubic",
-                 activation='Tanh', vector_field='original', width=None,
-                 depth=None):
+    def __init__(self, input_channels: int, hidden_channels: int,
+                 vector_field: str = 'original'):
         super(NeuralCDE, self).__init__()
-        if vector_field == 'simple':
-            self.func = SimpleVectorField(hidden_channels, input_channels,
-                                          non_linearity=activation)
-        elif vector_field == 'multilayer':
-            self.func = MultiLayerVectorField(
-                hidden_channels, input_channels, width, depth,
-                activation=activation)
-        elif vector_field == 'original':
+        self.initial = torch.nn.Linear(input_channels, hidden_channels)
+        if vector_field == 'original':
             self.func = OriginalVectorField(hidden_channels, input_channels)
 
         elif vector_field == 'almost_original':
-            self.func = AlmostOriginalVectorField(hidden_channels, input_channels)
+            self.func = AlmostOriginalVectorField(hidden_channels,
+                                                  input_channels)
 
         else:
             raise ValueError(
-                "vector_field must be one of ['simple, 'multilayer']")
-        self.initial = torch.nn.Linear(input_channels, hidden_channels)
-        # self.readout = torch.nn.Linear(hidden_channels, output_channels)
-        self.interpolation = interpolation
+                "vector_field must be one of ['original, 'almost_original']")
 
-    def forward(self, X):
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
         coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(
             X)
         Xfunc = torchcde.CubicSpline(coeffs)
@@ -271,6 +239,8 @@ class NeuralCDE(torch.nn.Module):
         z0 = self.initial(X0)
 
         step_size = (Xfunc.grid_points[1:] - Xfunc.grid_points[:-1]).min()
+        # Here, changing the NeuralCDE solver to a non-implicit scheme makes
+        # training drastically faster
         z_T = torchcde.cdeint(X=Xfunc,
                               z0=z0,
                               func=self.func,
@@ -280,7 +250,7 @@ class NeuralCDE(torch.nn.Module):
         z_T = z_T[:, 1]
         return z_T
 
-    def predict_trajectory(self, X):
+    def predict_trajectory(self, X: torch.Tensor) -> torch.Tensor:
         coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(
             X)
         Xfunc = torchcde.CubicSpline(coeffs)
@@ -298,8 +268,8 @@ class NeuralCDE(torch.nn.Module):
                               method='rk4',
                               options=dict(step_size=step_size))
 
-        return Y.detach().numpy()
+        return Y.detach()
 
-    def get_l2_error(self, X, Y):
+    def get_l2_error(self, X: torch.tensor, Y: torch.Tensor) -> float:
         Y_pred = self.predict_trajectory(X)
         return l2_distance(Y, Y_pred)
