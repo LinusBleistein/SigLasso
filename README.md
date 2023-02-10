@@ -42,4 +42,4 @@ All hyperparameters used in the article are given in the configuration file
 
 ## HGR forecasting during the COVID-19 pandemic
 
-Please refer to the notebook `notebooks/Covid preprocessing.ipynb` for details on the pre-processing of the COVID-19 data and to `notebooks/Covid results plots.ipynb` for result analysis. The original can be found [here](https://gitlab.pasteur.fr/mmmi-pasteur/covid19-ensemble-model).  
+Please refer to the notebook `notebooks/Covid preprocessing.ipynb` for details on the pre-processing of the COVID-19 data and to `notebooks/Covid results plots.ipynb` for result analysis. The original data can be found [here](https://gitlab.pasteur.fr/mmmi-pasteur/covid19-ensemble-model).  
