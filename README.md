@@ -38,7 +38,7 @@ All hyperparameters used in the article are given in the configuration file
 
 ## Toy experiment
 
-
+Take a look at `notebooks/Toy model.ipynb`.
 
 ## HGR forecasting during the COVID-19 pandemic
 
