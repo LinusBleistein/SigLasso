@@ -7,11 +7,11 @@ make sure the specific requirements are satisfied. Recommended Python version: 3
 
 To install requirements, use
 
-``pip install -r requirements.txt``.
+``pip install -r requirements.txt``
 
 Then install our code as a package using
 
-``pip install -e .`` .
+``pip install -e .`` 
 
 ## Running an experiment
 
@@ -35,3 +35,9 @@ See also the notebook `notebooks/Demo models.ipynb` for some simple examples.
 
 All hyperparameters used in the article are given in the configuration file 
 `experiments/configs.py`. 
+
+## Toy experiment
+
+
+
+## HGR forecasting during the COVID-19 pandemic
