@@ -7,7 +7,7 @@ make sure the specific requirements are satisfied. Recommended Python version: 3
 
 To install requirements:
 
-``pip install requirements.txt``
+``pip install -r requirements.txt``
 
 Then you need to install our code as a package
 
