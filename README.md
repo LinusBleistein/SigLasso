@@ -5,13 +5,13 @@
 For reproductibility purposes, we advise to install the project in a dedicated virtual environment to 
 make sure the specific requirements are satisfied. Recommended Python version: 3.7.x.
 
-To install requirements:
+To install requirements, use
 
-``pip install -r requirements.txt``
+``pip install -r requirements.txt``.
 
-Then you need to install our code as a package
+Then install our code as a package using
 
-``python setup.py install``
+``pip install -e .`` .
 
 ## Running an experiment
 
