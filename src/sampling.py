@@ -5,7 +5,7 @@ from typing import Tuple
 
 def downsample(X: torch.Tensor, n_points_kept: int, with_noise: bool = False,
                noise_X_var: float = 0.5, keep_first: bool = False,
-               keep_last: bool = False, on_grid: torch.Tensor = None) \
+               keep_last: bool = False, on_grid: torch.Tensor = None, regular: bool = False) \
         -> Tuple[torch.Tensor, torch.Tensor]:
     """Downsample a dataframe, sampling n_points_kept randomly. If on_grid is
     passed, the points are subsampled on this grid.
@@ -36,23 +36,41 @@ def downsample(X: torch.Tensor, n_points_kept: int, with_noise: bool = False,
     if on_grid is None:
         on_grid = np.tile(np.arange(X.shape[1]), (X.shape[0], 1))
 
-    for i in range(n_samples):
-        # Do not select randomly the first or the last point
-        sampling_points = np.random.choice(on_grid[i, 1:-1],
-                                               size=n_points_kept,
-                                               replace=False)
-        #Keep the first sampling point
-        if keep_first:
-            sampling_points = np.insert(sampling_points, 0, on_grid[i, 0])
-        if keep_last:
-            sampling_points = np.insert(sampling_points, 0, on_grid[i, -1])
+    if regular == False:
+        for i in range(n_samples):
+            # Do not select randomly the first or the last point
+            sampling_points = np.random.choice(on_grid[i, 1:-1],
+                                                   size=n_points_kept,
+                                                   replace=False)
 
-        #Sort the sampling points
-        sampling_points = np.sort(sampling_points)
-        # print(sampling_points)
-        downsampled_X[i, :, :] = X[i, sampling_points, :]
-        times_X[i, :] = sampling_points
-        # time_X[i, :] = sampling_points / X.shape[1]
+            #Keep the first sampling point
+            if keep_first:
+                sampling_points = np.insert(sampling_points, 0, on_grid[i, 0])
+            if keep_last:
+                sampling_points = np.insert(sampling_points, 0, on_grid[i, -1])
+
+            #Sort the sampling points
+            sampling_points = np.sort(sampling_points)
+            # print(sampling_points)
+            downsampled_X[i, :, :] = X[i, sampling_points, :]
+            times_X[i, :] = sampling_points
+            # time_X[i, :] = sampling_points / X.shape[1]
+
+    if regular == True:
+        # In this case, do regular sampling using n_points_kept points
+        for i in range(n_samples):
+            sampling_points = np.linspace(start=1,stop=X.shape[1],num=n_points_kept,endpoint=False,dtype=int)
+            if keep_first:
+                sampling_points = np.insert(sampling_points, 0, on_grid[i, 0])
+            if keep_last:
+                sampling_points = np.insert(sampling_points, 0, on_grid[i, -1])
+
+            #Sort the sampling points
+            sampling_points = np.sort(sampling_points)
+
+            downsampled_X[i, :, :] = X[i, sampling_points, :]
+            times_X[i, :] = sampling_points
+
 
     if with_noise:
         noise_X = noise_X_var * torch.randn(downsampled_X.shape)

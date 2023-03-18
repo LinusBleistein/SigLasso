@@ -215,6 +215,124 @@ class GRUModel(torch.nn.Module):
         return l2_distance(Y, Y_pred)
 
 
+class LSTMModel(torch.nn.Module):
+    def __init__(self, input_channels: int, hidden_channels: int,
+                 output_dim: int,
+                 layer_dim: int = 1):
+        super(LSTMModel, self).__init__()
+
+        # Defining the number of layers and the nodes in each layer
+        self.layer_dim = layer_dim
+        self.hidden_channels = hidden_channels
+
+        # RNN layers
+        self.lstm = torch.nn.LSTM(
+            input_channels, hidden_channels, layer_dim, batch_first=True)
+
+        # Fully connected layer
+        self.fc = torch.nn.Linear(hidden_channels, output_dim)
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        assert X.ndim == 3, " X must have 3 dimensions: " \
+                            "(n_samples, n_points, dim_X)"
+        # Initializing hidden state for first input with zeros
+        h0 = torch.zeros(
+            self.layer_dim, X.size(0), self.hidden_channels).requires_grad_()
+        c0 = torch.zeros(
+            self.layer_dim, X.size(0), self.hidden_channels).requires_grad_()
+
+        # Forward propagation by passing in the input and hidden state
+        # into the model
+        out, _ = self.lstm(X, (h0.detach(),c0.detach()))
+
+        # Reshaping the outputs in the shape of
+        # (batch_size, seq_length, hidden_size) so that it can fit into the
+        # fully connected layer
+        out = out[:, -1, :]
+
+        # Convert the final state to our desired output shape
+        # (batch_size, output_dim)
+        out = self.fc(out)
+
+        return out
+
+    def predict_trajectory(self, X: torch.Tensor) -> torch.Tensor:
+        assert X.ndim == 3, " X must have 3 dimensions: " \
+                            "(n_samples, n_points, dim_X)"
+
+        h0 = torch.zeros(self.layer_dim, X.size(0),
+                         self.hidden_channels).requires_grad_()
+        c0 = torch.zeros(
+            self.layer_dim, X.size(0), self.hidden_channels).requires_grad_()
+        hidden_states, _ = self.lstm(X, (h0.detach(),c0.detach()))
+        out = []
+        for i in range(X.shape[1]):
+            out.append(self.fc(hidden_states[:, i, :]))
+        Y = torch.stack(out, dim=1)
+        return Y.detach()  # Need to detach to later compute l2 distance
+
+    def get_l2_error(self, X: torch.Tensor, Y:torch.Tensor) -> float:
+        Y_pred = self.predict_trajectory(X)
+        return l2_distance(Y, Y_pred)
+
+
+class RNNModel(torch.nn.Module):
+    def __init__(self, input_channels: int, hidden_channels: int,
+                 output_dim: int,
+                 layer_dim: int = 1):
+        super(RNNModel, self).__init__()
+
+        # Defining the number of layers and the nodes in each layer
+        self.layer_dim = layer_dim
+        self.hidden_channels = hidden_channels
+
+        # RNN layers
+        self.rnn = torch.nn.RNN(
+            input_channels, hidden_channels, layer_dim, batch_first=True)
+
+        # Fully connected layer
+        self.fc = torch.nn.Linear(hidden_channels, output_dim)
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        assert X.ndim == 3, " X must have 3 dimensions: " \
+                            "(n_samples, n_points, dim_X)"
+        # Initializing hidden state for first input with zeros
+        h0 = torch.zeros(
+            self.layer_dim, X.size(0), self.hidden_channels).requires_grad_()
+
+        # Forward propagation by passing in the input and hidden state
+        # into the model
+        out, _ = self.rnn(X, h0.detach())
+
+        # Reshaping the outputs in the shape of
+        # (batch_size, seq_length, hidden_size) so that it can fit into the
+        # fully connected layer
+        out = out[:, -1, :]
+
+        # Convert the final state to our desired output shape
+        # (batch_size, output_dim)
+        out = self.fc(out)
+
+        return out
+
+    def predict_trajectory(self, X: torch.Tensor) -> torch.Tensor:
+        assert X.ndim == 3, " X must have 3 dimensions: " \
+                            "(n_samples, n_points, dim_X)"
+
+        h0 = torch.zeros(self.layer_dim, X.size(0),
+                         self.hidden_channels).requires_grad_()
+        hidden_states, _ = self.rnn(X, h0.detach())
+        out = []
+        for i in range(X.shape[1]):
+            out.append(self.fc(hidden_states[:, i, :]))
+        Y = torch.stack(out, dim=1)
+        return Y.detach()  # Need to detach to later compute l2 distance
+
+    def get_l2_error(self, X: torch.Tensor, Y:torch.Tensor) -> float:
+        Y_pred = self.predict_trajectory(X)
+        return l2_distance(Y, Y_pred)
+
+
 class NeuralCDE(torch.nn.Module):
     def __init__(self, input_channels: int, hidden_channels: int,
                  vector_field: str = 'original'):

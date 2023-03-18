@@ -111,7 +111,6 @@ def matrix_to_function(X: torch.Tensor, time: torch.Tensor,
                          "'cubic'.")
 
 
-#TODO: delete this function?
 def get_cfi(theta,feature,dim,order):
     """
     Computes the normalized CFI of feature i (numbering of features starts at 0).
@@ -141,8 +140,6 @@ def get_cfi(theta,feature,dim,order):
     normalizing_constant = (dim**(order)-1)/(dim-1)
     return 1/normalizing_constant*cfi
 
-
-#TODO: delete this function?
 def get_pfi(theta,feature,dim,order):
     """
     Computes the normalized PFI of feature i (numbering starts at 0).
